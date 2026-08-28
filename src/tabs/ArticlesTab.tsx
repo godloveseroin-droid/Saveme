@@ -251,12 +251,12 @@ function renderStructuredBody(text: string) {
   const lines = text.split('\n')
   return lines.map((line, i) => {
     const trimmed = line.trim()
-    if (!trimmed) return <div key={i} className="h-2" />
+    if (!trimmed) return <div key={i} className="h-3 sm:h-2" />
     if (trimmed.includes('НЕ ДОПУСКАЕТСЯ')) {
       return (
         <div
           key={i}
-          className="my-3 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm font-bold text-red-300"
+          className="my-3 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm font-bold text-red-300 sm:my-3 sm:text-sm"
           style={{ textShadow: '0 0 8px rgba(239,68,68,0.4)' }}
         >
           {trimmed}
@@ -267,7 +267,7 @@ function renderStructuredBody(text: string) {
       return (
         <p
           key={i}
-          className="my-1.5 font-semibold text-amber-400"
+          className="my-2 font-semibold text-amber-400 sm:my-1.5"
           style={{ textShadow: '0 0 6px rgba(251,191,36,0.45)' }}
         >
           {trimmed}
@@ -278,7 +278,7 @@ function renderStructuredBody(text: string) {
       return (
         <p
           key={i}
-          className="mt-4 mb-1 text-lg font-bold text-neon"
+          className="mt-5 mb-2 text-lg font-bold text-neon sm:mt-4 sm:mb-1"
           style={{ textShadow: '0 0 8px rgba(0,229,255,0.55)' }}
         >
           {trimmed}
@@ -286,7 +286,7 @@ function renderStructuredBody(text: string) {
       )
     }
     return (
-      <p key={i} className="my-0.5">
+      <p key={i} className="mb-3 text-[15px] leading-[1.8] text-ink/90 sm:my-0.5 sm:text-base sm:leading-relaxed sm:text-ink">
         {renderBody(trimmed)}
       </p>
     )
@@ -365,7 +365,7 @@ export default function ArticlesTab({ onBack }: { onBack: () => void }) {
                 }}
               >
                 <div className="overflow-hidden">
-                  <div className="px-6 pb-6 text-base leading-relaxed text-ink">
+                  <div className="px-5 pb-7 pt-1 text-[15px] leading-[1.8] text-ink/90 sm:px-6 sm:pb-6 sm:pt-0 sm:text-base sm:leading-relaxed sm:text-ink">
                     {renderStructuredBody(article.body)}
                   </div>
                 </div>
