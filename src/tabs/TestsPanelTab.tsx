@@ -376,12 +376,13 @@ export default function TestsPanelTab({ onBack }: Props) {
                 onClick={() => canStart ? startBlock(block) : undefined}
                 disabled={!canStart}
                 className="block w-full overflow-hidden rounded-lg transition active:scale-[0.98] disabled:opacity-30"
+                style={{ aspectRatio: '1024 / 307' }}
                 aria-label={block.label}
               >
                 <img
                   src={`/test-block-${i}.webp`}
                   alt={block.label}
-                  className="block w-full h-auto select-none"
+                  className="block h-full w-full select-none object-cover"
                   draggable={false}
                 />
               </button>
