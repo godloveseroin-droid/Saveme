@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Send, DoorOpen } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import {
   assignNick, fetchMessages, getMyNick, nickColor, sendMessage,
   type ChatMessage,
 } from '../lib/fludilka'
 import { todayKey } from '../lib/storage'
+import { api } from '../lib/api'
 
 function formatTime(iso: string): string {
   const d = new Date(iso)
@@ -54,27 +54,28 @@ export default function FludilkaTab({ onBack }: { onBack: () => void }) {
     })()
   }, [scrollToBottom])
 
-  // Realtime subscription
+  // Polling for new messages
   useEffect(() => {
-    const channel = supabase
-      .channel('fludilka-chat')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'chat_messages',
-      }, (payload) => {
-        const row = payload.new as ChatMessage
-        if (row.chat_day !== dayKey) return
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === row.id)) return prev
-          return [...prev, row]
-        })
-        scrollToBottom()
-      })
-      .subscribe()
-
-    return () => { void supabase.removeChannel(channel) }
-  }, [dayKey, scrollToBottom])
+    const poll = () => {
+      void (async () => {
+        const day = todayKey()
+        if (day !== dayKey) {
+          setDayKey(day)
+          return
+        }
+        try {
+          const msgs = await api.getMessages(day)
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id))
+            const fresh = msgs.filter((m) => !existingIds.has(m.id))
+            return fresh.length ? [...prev, ...fresh] : prev
+          })
+        } catch { /* ignore */ }
+      })()
+    }
+    const timer = window.setInterval(poll, 5000)
+    return () => { window.clearInterval(timer) }
+  }, [dayKey])
 
   // Midnight rollover check
   useEffect(() => {

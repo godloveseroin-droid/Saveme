@@ -1,7 +1,7 @@
 import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { Employee, Meme } from '../types'
 import { workersList as fallbackWorkers, type Worker } from '../lib/data'
-import { supabase } from '../lib/supabase'
+import { api, type TeamStatsRow } from '../lib/api'
 
 type Stats = { weight: number; happiness: number; balance: number; titleLevel: number; titleXP: number }
 export type TeamStats = Record<string, Stats>
@@ -28,15 +28,21 @@ type AppContextValue = {
 
 const AppContext = createContext<AppContextValue | null>(null)
 
-function mapStats(rows: Array<{ worker_name: string; weight: number; happiness: number; balance: number; title_level: number; title_xp: number }>): TeamStats {
-  return Object.fromEntries(rows.map((row) => [row.worker_name, {
+function mapRowToStats(row: TeamStatsRow): Stats {
+  return {
     weight: row.weight,
     happiness: row.happiness,
     balance: row.balance,
     titleLevel: row.title_level ?? 1,
     titleXP: row.title_xp ?? 0,
-  }]))
+  }
 }
+
+function mapStats(rows: TeamStatsRow[]): TeamStats {
+  return Object.fromEntries(rows.map((row) => [row.worker_name, mapRowToStats(row)]))
+}
+
+const POLL_INTERVAL = 15000
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -51,19 +57,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setError(null)
 
-    const [employeeResult, workerResult, statsResult, memeResult] = await Promise.all([
-      supabase.from('employees').select('*').order('full_name'),
-      supabase.from('game_workers').select('name, gender').order('name'),
-      supabase.from('team_stats').select('worker_name, weight, happiness, balance, title_level, title_xp'),
-      supabase.from('memes').select('*').order('created_at', { ascending: false }),
-    ])
+    try {
+      const [employeeData, workerData, statsData, memeData] = await Promise.all([
+        api.getEmployees(),
+        api.getWorkers(),
+        api.getTeamStats(),
+        api.getMemes(),
+      ])
 
-    const onlineEmployees = employeeResult.data as Employee[] | null
-    if (employeeResult.error && !onlineEmployees?.length) setError('Не удалось загрузить общую базу заявок')
-    setEmployees(onlineEmployees ?? [])
-    setWorkers(workerResult.data?.length ? workerResult.data as Worker[] : fallbackWorkers)
-    setTeamStats(statsResult.data ? mapStats(statsResult.data) : {})
-    setMemes(memeResult.data as Meme[] ?? [])
+      setEmployees(employeeData ?? [])
+      setWorkers(workerData?.length ? workerData : fallbackWorkers)
+      setTeamStats(statsData ? mapStats(statsData) : {})
+      setMemes(memeData ?? [])
+    } catch {
+      setError('Не удалось загрузить данные с сервера')
+    }
     setLoading(false)
   }, [])
 
@@ -72,26 +80,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('memes-v1')
     localStorage.removeItem('team-life-stats-v3')
     void refresh()
-    const channel = supabase
-      .channel('shared-app-data')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => { void refresh() })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'game_workers' }, () => { void refresh() })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_stats' }, (payload) => {
-        const row = payload.new as { worker_name?: string; weight?: number; happiness?: number; balance?: number; title_level?: number; title_xp?: number }
-        if (row.worker_name && typeof row.weight === 'number' && typeof row.happiness === 'number' && typeof row.balance === 'number') {
-          setTeamStats((current) => ({ ...current, [row.worker_name as string]: {
-            weight: row.weight as number,
-            happiness: row.happiness as number,
-            balance: row.balance as number,
-            titleLevel: row.title_level ?? 1,
-            titleXP: row.title_xp ?? 0,
-          } }))
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'memes' }, () => { void refresh() })
-      .subscribe()
 
-    return () => { void supabase.removeChannel(channel) }
+    const timer = window.setInterval(() => { void refresh() }, POLL_INTERVAL)
+    return () => { window.clearInterval(timer) }
   }, [refresh])
 
   const unlock = (password: string): boolean => {
@@ -103,93 +94,89 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const lock = (): void => setIsAdmin(false)
 
   const addEmployee = async (data: Omit<Employee, 'id' | 'created_at'>): Promise<boolean> => {
-    const { error: insertError } = await supabase.from('employees').insert({
-      full_name: data.full_name,
-      organization: data.organization,
-      access_date: data.access_date,
-      record_type: data.record_type,
-      vehicle_type: data.vehicle_type,
-    })
-    if (insertError) return false
-    await refresh()
-    return true
+    try {
+      await api.addEmployee(data)
+      await refresh()
+      return true
+    } catch {
+      return false
+    }
   }
 
   const deleteEmployee = async (id: string): Promise<boolean> => {
-    const { error: deleteError } = await supabase.from('employees').delete().eq('id', id)
-    if (deleteError) return false
-    await refresh()
-    return true
+    try {
+      await api.deleteEmployee(id)
+      await refresh()
+      return true
+    } catch {
+      return false
+    }
   }
 
   const addWorker = async (name: string, gender: Worker['gender']): Promise<boolean> => {
-    const { error: workerError } = await supabase.from('game_workers').insert({ name, gender })
-    if (workerError) return false
-    await supabase.from('team_stats').insert({ worker_name: name, weight: 0, happiness: 0, balance: 0 })
-    await refresh()
-    return true
+    try {
+      await api.addWorker(name, gender)
+      await refresh()
+      return true
+    } catch {
+      return false
+    }
   }
 
   const removeWorker = async (name: string): Promise<boolean> => {
-    const { error: deleteError } = await supabase.from('game_workers').delete().eq('name', name)
-    if (deleteError) return false
-    await refresh()
-    return true
+    try {
+      await api.removeWorker(name)
+      await refresh()
+      return true
+    } catch {
+      return false
+    }
   }
 
   const adjustTeamStats = async (workerName: string, delta: { weight: number; happiness: number; balance: number }): Promise<boolean> => {
-    const { data, error: adjustError } = await supabase.rpc('adjust_team_stats', {
-      p_worker_name: workerName,
-      p_weight: delta.weight,
-      p_happiness: delta.happiness,
-      p_balance: delta.balance,
-    })
-    if (adjustError || !data) return false
-    const row = data as { worker_name: string; weight: number; happiness: number; balance: number; title_level: number; title_xp: number }
-    setTeamStats((current) => ({ ...current, [row.worker_name]: {
-      weight: row.weight,
-      happiness: row.happiness,
-      balance: row.balance,
-      titleLevel: row.title_level ?? 1,
-      titleXP: row.title_xp ?? 0,
-    } }))
-    return true
+    try {
+      const row = await api.adjustTeamStats(workerName, delta.weight, delta.happiness, delta.balance)
+      setTeamStats((current) => ({ ...current, [row.worker_name]: mapRowToStats(row) }))
+      return true
+    } catch {
+      return false
+    }
   }
 
   const adjustTitleXP = async (workerName: string): Promise<{ newLevel: number; newXp: number; leveledUp: boolean } | null> => {
-    const { data: current } = await supabase
-      .from('team_stats')
-      .select('title_level, title_xp')
-      .eq('worker_name', workerName)
-      .maybeSingle()
-    const curLevel = (current as { title_level?: number } | null)?.title_level ?? 1
-    const curXP = (current as { title_xp?: number } | null)?.title_xp ?? 0
-    if (curLevel >= 25) {
-      setTeamStats((c) => ({ ...c, [workerName]: { ...c[workerName], titleLevel: 25, titleXP: 10 } }))
-      return { newLevel: 25, newXp: 10, leveledUp: false }
+    try {
+      const allStats = await api.getTeamStats()
+      const row = allStats.find((r) => r.worker_name === workerName)
+      const curLevel = row?.title_level ?? 1
+      const curXP = row?.title_xp ?? 0
+      if (curLevel >= 25) {
+        setTeamStats((c) => ({ ...c, [workerName]: { ...c[workerName], titleLevel: 25, titleXP: 10 } }))
+        return { newLevel: 25, newXp: 10, leveledUp: false }
+      }
+      let newXP = curXP + 1
+      let newLevel = curLevel
+      let leveledUp = false
+      if (newXP >= 10) {
+        newXP = 0
+        newLevel = Math.min(curLevel + 1, 25)
+        leveledUp = true
+      }
+      await api.updateTitle(workerName, newLevel, newXP)
+      setTeamStats((c) => ({ ...c, [workerName]: { ...c[workerName], titleLevel: newLevel, titleXP: newXP } }))
+      return { newLevel, newXp: newXP, leveledUp }
+    } catch {
+      return null
     }
-    let newXP = curXP + 1
-    let newLevel = curLevel
-    let leveledUp = false
-    if (newXP >= 10) {
-      newXP = 0
-      newLevel = Math.min(curLevel + 1, 25)
-      leveledUp = true
-    }
-    const { error: updateError } = await supabase
-      .from('team_stats')
-      .update({ title_level: newLevel, title_xp: newXP })
-      .eq('worker_name', workerName)
-    if (updateError) return null
-    setTeamStats((c) => ({ ...c, [workerName]: { ...c[workerName], titleLevel: newLevel, titleXP: newXP } }))
-    return { newLevel, newXp: newXP, leveledUp }
   }
 
   const addMeme = async (description: string, imageUrl: string): Promise<boolean> => {
-    const { error: insertError } = await supabase.from('memes').insert({ description, image_url: imageUrl || null })
-    if (insertError) return false
-    await refresh()
-    return true
+    try {
+      await api.addMeme(description, imageUrl || null)
+      await refresh()
+      return true
+    } catch {
+      return false
+    }
   }
 
   const value = useMemo(

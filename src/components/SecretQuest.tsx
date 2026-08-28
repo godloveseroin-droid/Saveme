@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { DoorOpen, KeyRound, Lock } from 'lucide-react'
 import { nominations } from '../lib/nominations'
 import { getItem, setItem } from '../lib/storage'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import NameDropdown from './NameDropdown'
 
@@ -48,14 +48,9 @@ export default function SecretQuest({ onUnlocked }: { onUnlocked: () => void }) 
   }, [alreadyPassed, onUnlocked])
 
   useEffect(() => {
-    void supabase
-      .from('secret_attempts')
-      .select('attempts')
-      .eq('id', 1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setAttempts((data as { attempts: number }).attempts)
-      })
+    void api.getSecretAttempts().then((data) => {
+      if (data) setAttempts(data.attempts)
+    })
   }, [])
 
   const updateAnswer = (id: string, value: string): void => {
@@ -107,8 +102,8 @@ export default function SecretQuest({ onUnlocked }: { onUnlocked: () => void }) 
     setKeyTransition(true)
     setKeyTransform({ x: dx, y: dy })
     setPhase('flying')
-    void supabase.rpc('increment_secret_attempt').then(({ data }) => {
-      if (typeof data === 'number') setAttempts(data)
+    void api.incrementSecretAttempts().then((data) => {
+      if (data) setAttempts(data.attempts)
     })
     window.setTimeout(() => {
       if (isCorrect()) {

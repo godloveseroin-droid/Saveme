@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { workersList } from '../lib/data'
 import { getTitle } from '../lib/titles'
 import { TEAM_DAILY_QUESTIONS } from '../lib/teamQuestions'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 
 type TeamModeProps = {
   onBack: () => void
@@ -37,28 +37,17 @@ const [rewardPopup, setRewardPopup] = useState(false)
   if (!playerName) return
 
   const loadDailyVote = async () => {
-    const { data, error } = await supabase
-      .from('team_daily_votes')
-      .select('choice_1, choice_2, choice_3')
-      .eq('game_day', gameDay)
-      .eq('voter_name', playerName)
-      .maybeSingle()
-
-    if (error) {
-      console.error('Ошибка загрузки голоса:', error)
-      return
-    }
-
-    if (data) {
-      setDailyVotes([
-        data.choice_1,
-        data.choice_2,
-        data.choice_3,
-      ])
-      setDailyVoteDone(true)
-    } else {
-      setDailyVotes([])
-      setDailyVoteDone(false)
+    try {
+      const data = await api.getVote(gameDay, playerName)
+      if (data) {
+        setDailyVotes([data.choice_1, data.choice_2, data.choice_3])
+        setDailyVoteDone(true)
+      } else {
+        setDailyVotes([])
+        setDailyVoteDone(false)
+      }
+    } catch (err) {
+      console.error('Ошибка загрузки голоса:', err)
     }
   }
 
@@ -237,16 +226,10 @@ const [rewardPopup, setRewardPopup] = useState(false)
   if (dailyVotes.length !== 3 || dailyVotes.some((name) => !name)) return
   if (!playerName) return
 
-  const { error } = await supabase
-    .from('team_daily_votes')
-    .insert({
-      game_day: gameDay,
-      voter_name: playerName,
-      question: todayQuestion,
-      choice_1: dailyVotes[0],
-      choice_2: dailyVotes[1],
-      choice_3: dailyVotes[2],
-    })
+  const { error } = await api
+    .submitVote(gameDay, playerName, todayQuestion, dailyVotes)
+    .then(() => ({ error: null }))
+    .catch((err: Error) => ({ error: err }))
 
   if (error) {
     console.error('Ошибка сохранения голоса:', error)

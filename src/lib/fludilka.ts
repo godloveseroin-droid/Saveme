@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { api, type ChatMessage } from './api'
 import { getItem, setItem, todayKey } from './storage'
 
 export const NICKNAMES: string[] = [
@@ -48,15 +48,6 @@ export function getDeviceId(): string {
   return id
 }
 
-export type ChatMessage = {
-  id: string
-  user_id: string
-  nickname: string
-  message: string
-  chat_day: string
-  created_at: string
-}
-
 export type AssignResult =
   | { ok: true; nickname: string }
   | { ok: false; reason: 'no_nicks_left' }
@@ -64,13 +55,12 @@ export type AssignResult =
 export async function getMyNick(): Promise<string | null> {
   const deviceId = getDeviceId()
   const day = todayKey()
-  const { data } = await supabase
-    .from('chat_nicks')
-    .select('nickname')
-    .eq('user_id', deviceId)
-    .eq('chat_day', day)
-    .maybeSingle()
-  return (data as { nickname?: string } | null)?.nickname ?? null
+  try {
+    const res = await api.getMyNick(deviceId, day)
+    return res.nickname ?? null
+  } catch {
+    return null
+  }
 }
 
 export async function assignNick(): Promise<AssignResult> {
@@ -80,37 +70,28 @@ export async function assignNick(): Promise<AssignResult> {
   const existing = await getMyNick()
   if (existing) return { ok: true, nickname: existing }
 
-  const { data: taken } = await supabase
-    .from('chat_nicks')
-    .select('nickname')
-    .eq('chat_day', day)
+  try {
+    const taken = await api.getTakenNicks(day)
+    const takenSet = new Set(taken ?? [])
+    const available = NICKNAMES.filter((n) => !takenSet.has(n))
+    if (available.length === 0) return { ok: false, reason: 'no_nicks_left' }
 
-  const takenSet = new Set((taken as { nickname: string }[] | null ?? []).map((r) => r.nickname))
-  const available = NICKNAMES.filter((n) => !takenSet.has(n))
-  if (available.length === 0) return { ok: false, reason: 'no_nicks_left' }
-
-  const pick = available[Math.floor(Math.random() * available.length)]
-  const { error } = await supabase
-    .from('chat_nicks')
-    .insert({ user_id: deviceId, nickname: pick, chat_day: day })
-
-  if (error) {
+    const pick = available[Math.floor(Math.random() * available.length)]
+    await api.assignNick(deviceId, pick, day)
+    return { ok: true, nickname: pick }
+  } catch {
     const retry = await getMyNick()
     if (retry) return { ok: true, nickname: retry }
     return { ok: false, reason: 'no_nicks_left' }
   }
-  return { ok: true, nickname: pick }
 }
 
 export async function fetchMessages(day: string): Promise<ChatMessage[]> {
-  const { data, error } = await supabase
-    .from('chat_messages')
-    .select('*')
-    .eq('chat_day', day)
-    .order('created_at', { ascending: true })
-    .limit(200)
-  if (error || !data) return []
-  return data as ChatMessage[]
+  try {
+    return await api.getMessages(day)
+  } catch {
+    return []
+  }
 }
 
 export async function sendMessage(nickname: string, text: string): Promise<{ ok: boolean; message: ChatMessage | null; error: string | null }> {
@@ -118,24 +99,21 @@ export async function sendMessage(nickname: string, text: string): Promise<{ ok:
   const day = todayKey()
   const trimmed = text.trim()
   if (!trimmed || trimmed.length > 300) return { ok: false, message: null, error: 'Пустое сообщение' }
-  const { data, error } = await supabase
-    .from('chat_messages')
-    .insert({ user_id: deviceId, nickname, message: trimmed, chat_day: day })
-    .select('*')
-    .single()
-  if (error) {
-    console.error('[fludilka] insert error:', error.message, error.code, error.details)
-    return { ok: false, message: null, error: error.message }
+  try {
+    const message = await api.sendMessage(deviceId, nickname, trimmed, day)
+    return { ok: true, message, error: null }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Не удалось отправить'
+    return { ok: false, message: null, error: msg }
   }
-  return { ok: true, message: data as ChatMessage, error: null }
 }
 
 export async function countTodayMessages(): Promise<number> {
   const day = todayKey()
-  const { count, error } = await supabase
-    .from('chat_messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('chat_day', day)
-  if (error || count === null) return 0
-  return count
+  try {
+    const res = await api.getMessageCount(day)
+    return res.count ?? 0
+  } catch {
+    return 0
+  }
 }

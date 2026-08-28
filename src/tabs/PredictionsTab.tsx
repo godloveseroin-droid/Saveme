@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext'
 import BackButton from '../components/BackButton'
 import { getItem, removeItem, setItem, todayKey } from '../lib/storage'
 import { getPredictionForWorker } from '../lib/workers'
-import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 
 type SavedPrediction = {
   date: string
@@ -57,19 +57,13 @@ export default function PredictionsTab({ onBack }: { onBack: () => void }) {
   }, [])
 
   const loadCounts = async (): Promise<void> => {
-    const { data, error } = await supabase
-      .from('prediction_counts')
-      .select('name, count')
-      .order('count', { ascending: false })
-      .order('name', { ascending: true })
-
-    if (error || !data) {
+    try {
+      const data = await api.getPredictionCounts()
+      setCounts(data ?? [])
+      setCountsError(false)
+    } catch {
       setCountsError(true)
-      return
     }
-
-    setCounts(data as PredictionCount[])
-    setCountsError(false)
   }
 
   useEffect(() => {
@@ -84,7 +78,7 @@ export default function PredictionsTab({ onBack }: { onBack: () => void }) {
     const text = getPredictionForWorker(worker, new Date(), 0, workers)
     setPrediction(text)
     setItem(predictionStorageKey, { date: todayKey(), name: worker.name, text })
-    await supabase.rpc('increment_prediction_count', { p_name: worker.name })
+    void api.incrementPredictionCount(worker.name)
   }
 
   const openAdmin = (): void => {
