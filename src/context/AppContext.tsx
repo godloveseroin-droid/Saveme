@@ -1,11 +1,15 @@
 import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { Employee, Meme } from '../types'
 import { workersList as fallbackWorkers, type Worker } from '../lib/data'
-import { api } from '../lib/api'
+import { api, type TeamStatsRow } from '../lib/api'
+
+type Stats = { weight: number; happiness: number; balance: number; titleLevel: number; titleXP: number }
+export type TeamStats = Record<string, Stats>
 
 type AppContextValue = {
   employees: Employee[]
   workers: Worker[]
+  teamStats: TeamStats
   memes: Meme[]
   isAdmin: boolean
   loading: boolean
@@ -16,17 +20,34 @@ type AppContextValue = {
   deleteEmployee: (id: string) => Promise<boolean>
   addWorker: (name: string, gender: Worker['gender']) => Promise<boolean>
   removeWorker: (name: string) => Promise<boolean>
+  adjustTeamStats: (workerName: string, delta: { weight: number; happiness: number; balance: number }) => Promise<boolean>
+  adjustTitleXP: (workerName: string) => Promise<{ newLevel: number; newXp: number; leveledUp: boolean } | null>
   addMeme: (description: string, imageUrl: string) => Promise<boolean>
   refresh: () => Promise<void>
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
 
+function mapRowToStats(row: TeamStatsRow): Stats {
+  return {
+    weight: row.weight,
+    happiness: row.happiness,
+    balance: row.balance,
+    titleLevel: row.title_level ?? 1,
+    titleXP: row.title_xp ?? 0,
+  }
+}
+
+function mapStats(rows: TeamStatsRow[]): TeamStats {
+  return Object.fromEntries(rows.map((row) => [row.worker_name, mapRowToStats(row)]))
+}
+
 const POLL_INTERVAL = 15000
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [workers, setWorkers] = useState<Worker[]>(fallbackWorkers)
+  const [teamStats, setTeamStats] = useState<TeamStats>({})
   const [memes, setMemes] = useState<Meme[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -37,14 +58,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setError(null)
 
     try {
-      const [employeeData, workerData, memeData] = await Promise.all([
+      const [employeeData, workerData, statsData, memeData] = await Promise.all([
         api.getEmployees(),
         api.getWorkers(),
+        api.getTeamStats(),
         api.getMemes(),
       ])
 
       setEmployees(employeeData ?? [])
       setWorkers(workerData?.length ? workerData : fallbackWorkers)
+      setTeamStats(statsData ? mapStats(statsData) : {})
       setMemes(memeData ?? [])
     } catch {
       setError('Не удалось загрузить данные с сервера')
@@ -55,6 +78,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     localStorage.removeItem('employees-v1')
     localStorage.removeItem('memes-v1')
+    localStorage.removeItem('team-life-stats-v3')
     void refresh()
 
     const timer = window.setInterval(() => { void refresh() }, POLL_INTERVAL)
@@ -109,6 +133,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const adjustTeamStats = async (workerName: string, delta: { weight: number; happiness: number; balance: number }): Promise<boolean> => {
+    try {
+      const row = await api.adjustTeamStats(workerName, delta.weight, delta.happiness, delta.balance)
+      setTeamStats((current) => ({ ...current, [row.worker_name]: mapRowToStats(row) }))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const adjustTitleXP = async (workerName: string): Promise<{ newLevel: number; newXp: number; leveledUp: boolean } | null> => {
+    try {
+      const allStats = await api.getTeamStats()
+      const row = allStats.find((r) => r.worker_name === workerName)
+      const curLevel = row?.title_level ?? 1
+      const curXP = row?.title_xp ?? 0
+      if (curLevel >= 25) {
+        setTeamStats((c) => ({ ...c, [workerName]: { ...c[workerName], titleLevel: 25, titleXP: 10 } }))
+        return { newLevel: 25, newXp: 10, leveledUp: false }
+      }
+      let newXP = curXP + 1
+      let newLevel = curLevel
+      let leveledUp = false
+      if (newXP >= 10) {
+        newXP = 0
+        newLevel = Math.min(curLevel + 1, 25)
+        leveledUp = true
+      }
+      await api.updateTitle(workerName, newLevel, newXP)
+      setTeamStats((c) => ({ ...c, [workerName]: { ...c[workerName], titleLevel: newLevel, titleXP: newXP } }))
+      return { newLevel, newXp: newXP, leveledUp }
+    } catch {
+      return null
+    }
+  }
+
   const addMeme = async (description: string, imageUrl: string): Promise<boolean> => {
     try {
       await api.addMeme(description, imageUrl || null)
@@ -120,8 +180,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   const value = useMemo(
-    () => ({ employees, workers, memes, isAdmin, loading, error, unlock, lock, addEmployee, deleteEmployee, addWorker, removeWorker, addMeme, refresh }),
-    [employees, workers, memes, isAdmin, loading, error, refresh],
+    () => ({ employees, workers, teamStats, memes, isAdmin, loading, error, unlock, lock, addEmployee, deleteEmployee, addWorker, removeWorker, adjustTeamStats, adjustTitleXP, addMeme, refresh }),
+    [employees, workers, teamStats, memes, isAdmin, loading, error, refresh],
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
