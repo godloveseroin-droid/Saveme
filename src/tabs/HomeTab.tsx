@@ -4,7 +4,9 @@ import { getDailyNews, getWorkerOfWeek } from '../lib/workers'
 import TeamLifePanel from '../components/TeamLifePanel'
 import GamePanel from '../components/GamePanel'
 import SwipeBack from '../components/SwipeBack'
+import UserSwitcher from '../components/UserSwitcher'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 
 type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests'
 
@@ -72,6 +74,9 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
   const [showNewPanel, setShowNewPanel] = useState(false)
   const [newPanelFade, setNewPanelFade] = useState(false)
   const [homeDimmed, setHomeDimmed] = useState(false)
+  const [showSwitcher, setShowSwitcher] = useState(false)
+
+  const { currentUser } = useAuth()
 
   const openTeamLife = () => {
     setShowTeamLife(true)
@@ -160,6 +165,14 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
         <div>
           <p className="text-[10px] font-bold tracking-[0.25em] text-neon">АМАЛЬГАМА</p>
           <h1 className="mt-1 text-2xl font-extrabold text-ink">Главная</h1>
+          {currentUser && (
+            <button
+              onClick={() => setShowSwitcher(true)}
+              className="mt-1 text-[11px] font-bold text-ink/40 transition hover:text-neon active:scale-95"
+            >
+              {currentUser.workerName}
+            </button>
+          )}
         </div>
         <img src="/app-icon.webp" alt="" className="h-11 w-11 rounded-full border border-neon/40 object-cover" />
       </header>
@@ -197,6 +210,13 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
           <BannerButton key={banner.id} src={banner.src} alt={banner.alt} onClick={() => onNavigate(banner.id)} />
         ))}
       </div>
+
+      {showSwitcher && (
+        <UserSwitcher
+          onSwitched={() => setShowSwitcher(false)}
+          onClose={() => setShowSwitcher(false)}
+        />
+      )}
 
     </div>
   )
