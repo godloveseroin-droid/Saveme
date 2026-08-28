@@ -7,9 +7,8 @@ import ArticlesTab from './tabs/ArticlesTab'
 import SecretTab from './tabs/SecretTab'
 import FludilkaTab from './tabs/FludilkaTab'
 import SwipeBack from './components/SwipeBack'
-import TeamMode from './components/TeamMode'
 
-type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'team'
+type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka'
 
 function Shell() {
   const [tab, setTab] = useState<Tab | 'home'>('home')
@@ -76,11 +75,6 @@ function Shell() {
             <FludilkaTab onBack={goHome} />
           </SwipeBack>
         )}
-        {tab === 'team' && (
-  <SwipeBack onBack={goHome} innerClassName="mx-auto min-h-screen max-w-md px-4 pb-10 pt-6">
-    <TeamMode onBack={goHome} />
-  </SwipeBack>
-)}
       </main>
     </div>
   )

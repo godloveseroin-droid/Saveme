@@ -3,7 +3,7 @@ import { Bell } from 'lucide-react'
 import { getDailyNews, getWorkerOfWeek } from '../lib/workers'
 import { useApp } from '../context/AppContext'
 
-type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'team'
+type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka'
 
 type Banner = { id: Tab; src: string; alt: string }
 
@@ -12,7 +12,6 @@ const banners: Banner[] = [
   { id: 'predictions', src: '/banner-predictions.webp', alt: 'Предсказания' },
   { id: 'articles', src: '/banner-articles.webp', alt: 'Статьи' },
   { id: 'secret', src: '/banner-secret.webp', alt: 'Секретная комната' },
-  { id: 'team', src: '/banner-team.webp', alt: 'Командный режим' },
 ]
 
 function BannerButton({ src, alt, onClick }: { src: string; alt: string; onClick: () => void }) {
