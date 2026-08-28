@@ -24,21 +24,19 @@ export type SavedProgress = {
   savedAt: number
 }
 
-function storageKey(userId: string): string {
-  return `seroin_test_progress__${userId}`
-}
+const STORAGE_KEY = 'seroin_test_progress'
 
-export function saveProgress(progress: SavedProgress, userId: string): void {
+export function saveProgress(progress: SavedProgress): void {
   try {
-    localStorage.setItem(storageKey(userId), JSON.stringify(progress))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress))
   } catch {
     // storage full or unavailable — silently ignore
   }
 }
 
-export function loadProgress(userId: string): SavedProgress | null {
+export function loadProgress(): SavedProgress | null {
   try {
-    const raw = localStorage.getItem(storageKey(userId))
+    const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as SavedProgress
     if (!parsed || !parsed.queue || parsed.queue.length === 0) return null
@@ -48,9 +46,9 @@ export function loadProgress(userId: string): SavedProgress | null {
   }
 }
 
-export function clearProgress(userId: string): void {
+export function clearProgress(): void {
   try {
-    localStorage.removeItem(storageKey(userId))
+    localStorage.removeItem(STORAGE_KEY)
   } catch {
     // ignore
   }

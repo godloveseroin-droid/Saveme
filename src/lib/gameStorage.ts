@@ -38,10 +38,6 @@ export type PlayerData = {
 const PLAYERS_KEY = 'game-players'
 const CURRENT_KEY = 'game-current-player'
 
-function userScopedKey(base: string, userId: string): string {
-  return `${base}__${userId}`
-}
-
 const THREE_HOURS_MS = 3 * 60 * 60 * 1000
 
 export const SHOP_ITEMS: ShopItem[] = [
@@ -133,37 +129,37 @@ function defaultPlayerData(name: string): PlayerData {
   }
 }
 
-export function getAllPlayers(userId: string): Record<string, PlayerData> {
-  return getItem<Record<string, PlayerData>>(userScopedKey(PLAYERS_KEY, userId), {})
+export function getAllPlayers(): Record<string, PlayerData> {
+  return getItem<Record<string, PlayerData>>(PLAYERS_KEY, {})
 }
 
-export function getCurrentPlayerName(userId: string): string | null {
-  return getItem<string | null>(userScopedKey(CURRENT_KEY, userId), null)
+export function getCurrentPlayerName(): string | null {
+  return getItem<string | null>(CURRENT_KEY, null)
 }
 
-export function setCurrentPlayerName(name: string | null, userId: string): void {
+export function setCurrentPlayerName(name: string | null): void {
   if (name === null) {
-    removeItem(userScopedKey(CURRENT_KEY, userId))
+    removeItem(CURRENT_KEY)
   } else {
-    setItem(userScopedKey(CURRENT_KEY, userId), name)
+    setItem(CURRENT_KEY, name)
   }
 }
 
-export function getPlayerData(name: string, userId: string): PlayerData {
-  const players = getAllPlayers(userId)
+export function getPlayerData(name: string): PlayerData {
+  const players = getAllPlayers()
   return players[name] ?? defaultPlayerData(name)
 }
 
-export function savePlayerData(name: string, data: PlayerData, userId: string): void {
-  const players = getAllPlayers(userId)
+export function savePlayerData(name: string, data: PlayerData): void {
+  const players = getAllPlayers()
   players[name] = data
-  setItem(userScopedKey(PLAYERS_KEY, userId), players)
+  setItem(PLAYERS_KEY, players)
 }
 
-export function resetPlayerData(name: string, userId: string): void {
-  const players = getAllPlayers(userId)
+export function resetPlayerData(name: string): void {
+  const players = getAllPlayers()
   players[name] = defaultPlayerData(name)
-  setItem(userScopedKey(PLAYERS_KEY, userId), players)
+  setItem(PLAYERS_KEY, players)
 }
 
 export const REWARD_INTERVAL_MS = THREE_HOURS_MS
@@ -189,8 +185,8 @@ export type GameStats = {
   unluckiest: { name: string; rate: number; failures: number; attempts: number }
 }
 
-export function getGameStats(userId: string): GameStats {
-  const players = getAllPlayers(userId)
+export function getGameStats(): GameStats {
+  const players = getAllPlayers()
   const entries = Object.values(players)
 
   let mostRuns = { count: 0, name: '—' }
@@ -238,15 +234,15 @@ export function getGameStats(userId: string): GameStats {
   }
 }
 
-export function buyItem(playerName: string, itemId: string, userId: string): { success: boolean; message: string } {
+export function buyItem(playerName: string, itemId: string): { success: boolean; message: string } {
   const item = getShopItem(itemId)
   if (!item) return { success: false, message: 'Товар не найден' }
 
-  const data = getPlayerData(playerName, userId)
+  const data = getPlayerData(playerName)
   if (data.coins < item.price) return { success: false, message: 'Недостаточно монет' }
 
   data.coins -= item.price
   data.inventory[itemId] = (data.inventory[itemId] ?? 0) + 1
-  savePlayerData(playerName, data, userId)
+  savePlayerData(playerName, data)
   return { success: true, message: `Куплено: ${item.name}` }
 }

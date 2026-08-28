@@ -6,7 +6,6 @@ import {
   saveProgress, loadProgress, clearProgress,
   type AnswerRecord, type SavedProgress, type BlockDef,
 } from '../lib/testProgress'
-import { useAuth } from '../context/AuthContext'
 import { Check, X, ChevronLeft, ChevronRight, RotateCcw, Award, TriangleAlert as AlertTriangle, Layers, Sword, Shield, Flame, Sparkles, Crown } from 'lucide-react'
 
 type Props = {
@@ -25,8 +24,6 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export default function TestsPanelTab({ onBack }: Props) {
-  const { currentUser } = useAuth()
-  const userId = currentUser?.id ?? 'anonymous'
   const [allQuestions, setAllQuestions] = useState<TestQuestionRow[]>([])
   const [allSorted, setAllSorted] = useState<TestQuestionRow[]>([])
   const [phase, setPhase] = useState<Phase>('loading')
@@ -64,7 +61,7 @@ export default function TestsPanelTab({ onBack }: Props) {
         const sorted = sortQuestions(rows)
         setAllQuestions(rows)
         setAllSorted(sorted)
-        const saved = loadProgress(userId)
+        const saved = loadProgress()
         if (saved && saved.queue.length > 0) {
           setSavedProgress(saved)
           setPhase('resumePrompt')
@@ -103,8 +100,8 @@ export default function TestsPanelTab({ onBack }: Props) {
       reviewStillWrong: [...reviewStillWrong],
       savedAt: Date.now(),
     }
-    saveProgress(progress, userId)
-  }, [phase, activeBlock, queue, idx, answers, reviewActive, reviewQueue, reviewIdx, reviewAnswers, reviewFixed, reviewStillWrong, userId])
+    saveProgress(progress)
+  }, [phase, activeBlock, queue, idx, answers, reviewActive, reviewQueue, reviewIdx, reviewAnswers, reviewFixed, reviewStillWrong])
 
   // ---- Start a block ----
   const startBlock = useCallback((block: BlockDef) => {
@@ -166,10 +163,10 @@ export default function TestsPanelTab({ onBack }: Props) {
   }, [savedProgress])
 
   const dismissSavedProgress = useCallback(() => {
-    clearProgress(userId)
+    clearProgress()
     setSavedProgress(null)
     setPhase('menu')
-  }, [userId])
+  }, [])
 
   // ---- Answer selection (main test) ----
   const selectAnswer = useCallback((optionIdx: number) => {
@@ -287,7 +284,7 @@ export default function TestsPanelTab({ onBack }: Props) {
   // ---- Return to menu ----
   const backToMenu = useCallback(() => {
     if (advanceTimer.current) clearTimeout(advanceTimer.current)
-    clearProgress(userId)
+    clearProgress()
     setActiveBlock(null)
     setQueue([])
     setIdx(0)
@@ -312,14 +309,14 @@ export default function TestsPanelTab({ onBack }: Props) {
       // Only clear if no wrong answers
       const wrongCount = answers.filter(a => !a.isCorrect).length
       if (wrongCount === 0) {
-        clearProgress(userId)
+        clearProgress()
       }
     }
     if (phase === 'finished' && reviewActive) {
       // Review complete — check if all fixed
-      clearProgress(userId)
+      clearProgress()
     }
-  }, [phase, reviewActive, answers, userId])
+  }, [phase, reviewActive, answers])
 
   // ====================== RENDER ======================
 

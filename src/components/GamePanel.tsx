@@ -3,7 +3,6 @@ import { Store, Backpack, RotateCcw, Gift, X, ChevronLeft, BookOpen, Heart } fro
 import { workersList } from '../lib/data'
 import { todayKey } from '../lib/storage'
 import { getRoadWeights, type RoadEvent } from '../lib/levelData'
-import { useAuth } from '../context/AuthContext'
 import {
   getCurrentPlayerName,
   setCurrentPlayerName,
@@ -120,9 +119,7 @@ const BOSS_ABILITIES = [
 ]
 
 export default function GamePanel({ onBack }: { onBack: () => void }) {
-  const { currentUser } = useAuth()
-  const userId = currentUser?.id ?? 'anonymous'
-  const [playerName, setPlayerName] = useState<string | null>(getCurrentPlayerName(userId))
+  const [playerName, setPlayerName] = useState<string | null>(getCurrentPlayerName())
   const [data, setData] = useState<PlayerData | null>(null)
   const [showSelect, setShowSelect] = useState(false)
   const [screen, setScreen] = useState<Screen>('main')
@@ -290,9 +287,9 @@ export default function GamePanel({ onBack }: { onBack: () => void }) {
       setShowSelect(true)
       return
     }
-    const d = getPlayerData(playerName, userId)
+    const d = getPlayerData(playerName)
     setData(d)
-    setStats(getGameStats(userId))
+    setStats(getGameStats())
     const today = todayKey()
     if (d.dailyClaimedDate !== today) {
       setShowDaily(true)
@@ -333,12 +330,12 @@ export default function GamePanel({ onBack }: { onBack: () => void }) {
   const update = (updater: (d: PlayerData) => PlayerData): void => {
     if (!playerName) return
     setData((prev) => {
-      const base = prev ?? getPlayerData(playerName, userId)
+      const base = prev ?? getPlayerData(playerName)
       const next = updater(base)
-      savePlayerData(playerName, next, userId)
+      savePlayerData(playerName, next)
       return next
     })
-    setStats(getGameStats(userId))
+    setStats(getGameStats())
   }
 
   const awardXP = (newLevel: number): void => {
@@ -367,7 +364,7 @@ export default function GamePanel({ onBack }: { onBack: () => void }) {
   }
 
   const handleSelectPlayer = (name: string): void => {
-    setCurrentPlayerName(name, userId)
+    setCurrentPlayerName(name)
     setPlayerName(name)
     setShowSelect(false)
   }
@@ -417,9 +414,9 @@ export default function GamePanel({ onBack }: { onBack: () => void }) {
 
   const handleReset = (): void => {
     if (!playerName) return
-    resetPlayerData(playerName, userId)
-    setData(getPlayerData(playerName, userId))
-    setStats(getGameStats(userId))
+    resetPlayerData(playerName)
+    setData(getPlayerData(playerName))
+    setStats(getGameStats())
     setShowReset(false)
     showToast('Прогресс сброшен')
   }
@@ -432,10 +429,10 @@ export default function GamePanel({ onBack }: { onBack: () => void }) {
       showToast(item ? `Куплено: ${item.name}` : 'Куплено')
       return
     }
-    const result = buyItem(playerName, itemId, userId)
+    const result = buyItem(playerName, itemId)
     if (result.success) {
-      setData(getPlayerData(playerName, userId))
-      setStats(getGameStats(userId))
+      setData(getPlayerData(playerName))
+      setStats(getGameStats())
       showToast(result.message)
     } else {
       showToast(result.message, true)

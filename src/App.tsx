@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppProvider } from './context/AppContext'
-import { AuthProvider, useAuth } from './context/AuthContext'
 import HomeTab from './tabs/HomeTab'
 import ApplicationsTab from './tabs/ApplicationsTab'
 import PredictionsTab from './tabs/PredictionsTab'
@@ -11,15 +10,12 @@ import TestsTab from './tabs/TestsTab'
 import TestsPanelTab from './tabs/TestsPanelTab'
 import AdminPanel from './components/AdminPanel'
 import SwipeBack from './components/SwipeBack'
-import LoginScreen from './components/LoginScreen'
 
 type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests' | 'testsPanel' | 'adminPanel'
 
 function Shell() {
-  const { currentUser, loading } = useAuth()
   const [tab, setTab] = useState<Tab | 'home'>('home')
   const homeScrollY = useRef(0)
-  const [loginKey, setLoginKey] = useState(0)
 
   const goHome = () => {
     setTab('home')
@@ -36,33 +32,6 @@ function Shell() {
     requestAnimationFrame(() => {
       window.scrollTo(0, 0)
     })
-  }
-
-  if (!loading && !currentUser) {
-    return (
-      <div className="relative min-h-screen w-full overflow-hidden bg-bg text-ink">
-        <div className="pointer-events-none fixed inset-0 z-0">
-          <div
-            className="animate-fog1 absolute -left-32 -top-32 h-[28rem] w-[28rem] rounded-full blur-3xl"
-            style={{ background: 'radial-gradient(circle, rgba(0,229,255,0.12), transparent 70%)' }}
-          />
-          <div
-            className="animate-fog2 absolute -bottom-40 -right-32 h-[32rem] w-[32rem] rounded-full blur-3xl"
-            style={{ background: 'radial-gradient(circle, rgba(255,43,214,0.10), transparent 70%)' }}
-          />
-          <div className="dot-grid absolute inset-0" />
-        </div>
-        <LoginScreen key={loginKey} onSuccess={() => setLoginKey(k => k + 1)} />
-      </div>
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-bg">
-        <div className="text-sm font-bold text-neon/60">Загрузка...</div>
-      </div>
-    )
   }
 
   return (
@@ -143,10 +112,8 @@ export default function App() {
   }, [])
 
   return (
-    <AuthProvider>
-      <AppProvider>
-        <Shell />
-      </AppProvider>
-    </AuthProvider>
+    <AppProvider>
+      <Shell />
+    </AppProvider>
   )
 }
