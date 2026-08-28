@@ -370,7 +370,8 @@ export default function TestsPanelTab({ onBack }: Props) {
           {BLOCKS.map((block, i) => {
             const { available } = countAvailable(allSorted, block)
             const canStart = available > 0
-            // Sprite sheet: 5 blocks stacked vertically, each is 1/5 of the image height
+            // Sprite sheet: 5 blocks stacked vertically in a 1024x1536 image.
+            // Each block is ~1024x307, aspect ratio ~3.34:1
             const spritePosition = `${(i / (BLOCKS.length - 1)) * 100}%`
             return (
               <button
@@ -379,8 +380,8 @@ export default function TestsPanelTab({ onBack }: Props) {
                 disabled={!canStart}
                 className="relative block w-full overflow-hidden rounded-2xl border border-neon/20 transition active:scale-[0.98] disabled:opacity-30"
                 style={{
-                  aspectRatio: '5 / 1',
-                  backgroundImage: 'url(/test-blocks-placeholder.webp)',
+                  aspectRatio: '1024 / 307',
+                  backgroundImage: 'url(/test-blocks.webp)',
                   backgroundSize: '100% 500%',
                   backgroundPosition: `center ${spritePosition}`,
                   backgroundRepeat: 'no-repeat',
