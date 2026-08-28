@@ -1,20 +1,18 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import SwipeBack from '../components/SwipeBack'
 import { api, type TestQuestionRow } from '../lib/api'
-import { Check, X, ChevronLeft, RotateCcw, Award, TriangleAlert as AlertTriangle } from 'lucide-react'
+import {
+  BLOCKS, BLOCK_SIZE, sortQuestions, questionsForBlock, countAvailable,
+  saveProgress, loadProgress, clearProgress,
+  type AnswerRecord, type SavedProgress, type BlockDef,
+} from '../lib/testProgress'
+import { Check, X, ChevronLeft, RotateCcw, Award, AlertTriangle, Layers, Zap } from 'lucide-react'
 
 type Props = {
   onBack: () => void
 }
 
-type Phase = 'loading' | 'error' | 'intro' | 'playing' | 'finished' | 'review'
-
-type AnswerRecord = {
-  questionId: string
-  selected: number
-  correctAnswer: number
-  isCorrect: boolean
-}
+type Phase = 'loading' | 'error' | 'menu' | 'resumePrompt' | 'playing' | 'finished' | 'review'
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -27,13 +25,16 @@ function shuffle<T>(arr: T[]): T[] {
 
 export default function TestsPanelTab({ onBack }: Props) {
   const [allQuestions, setAllQuestions] = useState<TestQuestionRow[]>([])
+  const [allSorted, setAllSorted] = useState<TestQuestionRow[]>([])
   const [phase, setPhase] = useState<Phase>('loading')
   const [errorMsg, setErrorMsg] = useState('')
+  const [savedProgress, setSavedProgress] = useState<SavedProgress | null>(null)
 
-  // Main test state
-  const [mainQueue, setMainQueue] = useState<TestQuestionRow[]>([])
-  const [mainIdx, setMainIdx] = useState(0)
-  const [mainAnswers, setMainAnswers] = useState<AnswerRecord[]>([])
+  // Active test state
+  const [activeBlock, setActiveBlock] = useState<BlockDef | null>(null)
+  const [queue, setQueue] = useState<TestQuestionRow[]>([])
+  const [idx, setIdx] = useState(0)
+  const [answers, setAnswers] = useState<AnswerRecord[]>([])
   const [selected, setSelected] = useState<number | null>(null)
   const [revealed, setRevealed] = useState(false)
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -46,7 +47,9 @@ export default function TestsPanelTab({ onBack }: Props) {
   const [reviewRevealed, setReviewRevealed] = useState(false)
   const [reviewStillWrong, setReviewStillWrong] = useState<Set<string>>(new Set())
   const [reviewFixed, setReviewFixed] = useState(0)
+  const [reviewActive, setReviewActive] = useState(false)
 
+  // ---- Load questions on mount ----
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -55,8 +58,16 @@ export default function TestsPanelTab({ onBack }: Props) {
       try {
         const rows = await api.getActiveTestQuestions()
         if (cancelled) return
+        const sorted = sortQuestions(rows)
         setAllQuestions(rows)
-        setPhase('intro')
+        setAllSorted(sorted)
+        const saved = loadProgress()
+        if (saved && saved.queue.length > 0) {
+          setSavedProgress(saved)
+          setPhase('resumePrompt')
+        } else {
+          setPhase('menu')
+        }
       } catch (err) {
         if (!cancelled) {
           setErrorMsg(err instanceof Error ? err.message : 'Ошибка загрузки')
@@ -70,53 +81,129 @@ export default function TestsPanelTab({ onBack }: Props) {
     }
   }, [])
 
-  // ---- MAIN TEST ----
-  const startMainTest = useCallback(() => {
+  // ---- Save progress whenever state changes during play/review ----
+  useEffect(() => {
+    if (phase !== 'playing' && phase !== 'review') return
+    if (!activeBlock) return
+    const progress: SavedProgress = {
+      blockId: activeBlock.id,
+      blockLabel: activeBlock.label,
+      mode: activeBlock.isMega ? 'mega' : 'block',
+      queue,
+      index: idx,
+      answers,
+      phase: reviewActive ? 'review' : 'playing',
+      reviewQueue,
+      reviewIndex: reviewIdx,
+      reviewAnswers,
+      reviewFixed,
+      reviewStillWrong: [...reviewStillWrong],
+      savedAt: Date.now(),
+    }
+    saveProgress(progress)
+  }, [phase, activeBlock, queue, idx, answers, reviewActive, reviewQueue, reviewIdx, reviewAnswers, reviewFixed, reviewStillWrong])
+
+  // ---- Start a block ----
+  const startBlock = useCallback((block: BlockDef) => {
     if (advanceTimer.current) clearTimeout(advanceTimer.current)
-    const shuffled = shuffle(allQuestions)
-    setMainQueue(shuffled)
-    setMainIdx(0)
-    setMainAnswers([])
+    const blockQuestions = questionsForBlock(allSorted, block).filter(q => q.correct_answer !== null)
+    if (blockQuestions.length === 0) return
+    const shuffled = shuffle(blockQuestions)
+    setActiveBlock(block)
+    setQueue(shuffled)
+    setIdx(0)
+    setAnswers([])
     setSelected(null)
     setRevealed(false)
+    setReviewActive(false)
+    setReviewQueue([])
+    setReviewIdx(0)
+    setReviewAnswers([])
+    setReviewSelected(null)
+    setReviewRevealed(false)
+    setReviewStillWrong(new Set())
+    setReviewFixed(0)
     setPhase('playing')
-  }, [allQuestions])
+  }, [allSorted])
 
+  // ---- Resume saved progress ----
+  const resumeProgress = useCallback(() => {
+    const saved = savedProgress
+    if (!saved) {
+      setPhase('menu')
+      return
+    }
+    const block = BLOCKS.find(b => b.id === saved.blockId) || null
+    setActiveBlock(block)
+    setQueue(saved.queue)
+    setIdx(saved.index)
+    setAnswers(saved.answers)
+    setReviewActive(saved.phase === 'review')
+    setReviewQueue(saved.reviewQueue || [])
+    setReviewIdx(saved.reviewIndex || 0)
+    setReviewAnswers(saved.reviewAnswers || [])
+    setReviewFixed(saved.reviewFixed || 0)
+    setReviewStillWrong(new Set(saved.reviewStillWrong || []))
+    if (saved.phase === 'review') {
+      // Restore review question display state
+      const rq = saved.reviewQueue?.[saved.reviewIndex]
+      if (rq) {
+        const ra = saved.reviewAnswers?.[saved.reviewIndex]
+        setReviewSelected(ra ? ra.selected : null)
+        setReviewRevealed(!!ra)
+      }
+      setPhase('review')
+    } else {
+      const a = saved.answers[saved.index]
+      setSelected(a ? a.selected : null)
+      setRevealed(!!a)
+      setPhase('playing')
+    }
+    setSavedProgress(null)
+  }, [savedProgress])
+
+  const dismissSavedProgress = useCallback(() => {
+    clearProgress()
+    setSavedProgress(null)
+    setPhase('menu')
+  }, [])
+
+  // ---- Answer selection (main test) ----
   const selectAnswer = useCallback((optionIdx: number) => {
     if (revealed) return
-    const q = mainQueue[mainIdx]
+    const q = queue[idx]
     const isCorrect = optionIdx === q.correct_answer
     setSelected(optionIdx)
     setRevealed(true)
-    setMainAnswers(prev => {
+    setAnswers(prev => {
       const next = [...prev]
-      next[mainIdx] = {
+      next[idx] = {
         questionId: q.question_id,
         selected: optionIdx,
-        correctAnswer: q.correct_answer,
+        correctAnswer: q.correct_answer ?? 0,
         isCorrect,
       }
       return next
     })
     advanceTimer.current = setTimeout(() => {
-      if (mainIdx + 1 >= mainQueue.length) {
+      if (idx + 1 >= queue.length) {
         setPhase('finished')
       } else {
-        setMainIdx(i => i + 1)
+        setIdx(i => i + 1)
         setSelected(null)
         setRevealed(false)
       }
     }, 500)
-  }, [revealed, mainQueue, mainIdx])
+  }, [revealed, queue, idx])
 
   const goToPrev = useCallback(() => {
-    if (mainIdx === 0) return
+    if (idx === 0) return
     if (advanceTimer.current) {
       clearTimeout(advanceTimer.current)
       advanceTimer.current = null
     }
-    setMainIdx(i => i - 1)
-    const prevAnswer = mainAnswers[mainIdx - 1]
+    setIdx(i => i - 1)
+    const prevAnswer = answers[idx - 1]
     if (prevAnswer) {
       setSelected(prevAnswer.selected)
       setRevealed(true)
@@ -124,31 +211,16 @@ export default function TestsPanelTab({ onBack }: Props) {
       setSelected(null)
       setRevealed(false)
     }
-  }, [mainIdx, mainAnswers])
+  }, [idx, answers])
 
-  const goToNext = useCallback(() => {
-    if (mainIdx + 1 >= mainQueue.length) {
-      setPhase('finished')
-      return
-    }
-    setMainIdx(i => i + 1)
-    const nextAnswer = mainAnswers[mainIdx + 1]
-    if (nextAnswer) {
-      setSelected(nextAnswer.selected)
-      setRevealed(true)
-    } else {
-      setSelected(null)
-      setRevealed(false)
-    }
-  }, [mainIdx, mainQueue.length, mainAnswers])
-
-  // ---- REVIEW (Работа над ошибками) ----
+  // ---- Review (Работа над ошибками) ----
   const startReview = useCallback(() => {
-    const wrongAnswers = mainAnswers.filter(a => !a.isCorrect)
+    const wrongAnswers = answers.filter(a => !a.isCorrect)
     const wrongQs = wrongAnswers
-      .map(a => mainQueue.find(q => q.question_id === a.questionId))
+      .map(a => queue.find(q => q.question_id === a.questionId))
       .filter((q): q is TestQuestionRow => q !== undefined)
     if (wrongQs.length === 0) return
+    if (advanceTimer.current) clearTimeout(advanceTimer.current)
     setReviewQueue(wrongQs)
     setReviewIdx(0)
     setReviewAnswers([])
@@ -156,8 +228,9 @@ export default function TestsPanelTab({ onBack }: Props) {
     setReviewRevealed(false)
     setReviewStillWrong(new Set())
     setReviewFixed(0)
+    setReviewActive(true)
     setPhase('review')
-  }, [mainAnswers, mainQueue])
+  }, [answers, queue])
 
   const selectReviewAnswer = useCallback((optionIdx: number) => {
     if (reviewRevealed) return
@@ -170,7 +243,7 @@ export default function TestsPanelTab({ onBack }: Props) {
       next[reviewIdx] = {
         questionId: q.question_id,
         selected: optionIdx,
-        correctAnswer: q.correct_answer,
+        correctAnswer: q.correct_answer ?? 0,
         isCorrect,
       }
       return next
@@ -208,19 +281,51 @@ export default function TestsPanelTab({ onBack }: Props) {
     }
   }, [reviewIdx, reviewAnswers])
 
-  // ---- COMPUTED VALUES ----
-  const totalQuestions = allQuestions.length
+  // ---- Return to menu ----
+  const backToMenu = useCallback(() => {
+    if (advanceTimer.current) clearTimeout(advanceTimer.current)
+    clearProgress()
+    setActiveBlock(null)
+    setQueue([])
+    setIdx(0)
+    setAnswers([])
+    setSelected(null)
+    setRevealed(false)
+    setReviewActive(false)
+    setReviewQueue([])
+    setReviewIdx(0)
+    setReviewAnswers([])
+    setReviewSelected(null)
+    setReviewRevealed(false)
+    setReviewStillWrong(new Set())
+    setReviewFixed(0)
+    setPhase('menu')
+  }, [])
 
-  // ---- LOADING / ERROR ----
+  // ---- Finish: clear saved progress when test is fully done ----
+  useEffect(() => {
+    if (phase === 'finished' && !reviewActive) {
+      // Main test finished, but review might still be needed — don't clear yet
+      // Only clear if no wrong answers
+      const wrongCount = answers.filter(a => !a.isCorrect).length
+      if (wrongCount === 0) {
+        clearProgress()
+      }
+    }
+    if (phase === 'finished' && reviewActive) {
+      // Review complete — check if all fixed
+      clearProgress()
+    }
+  }, [phase, reviewActive, answers])
+
+  // ====================== RENDER ======================
+
+  // -- Loading / Error --
   if (phase === 'loading' || phase === 'error') {
     return (
       <SwipeBack onBack={onBack} innerClassName="mx-auto max-w-md px-4 pb-10 pt-4">
-        <button onClick={onBack} className="mb-4 text-sm font-bold text-neon hover:text-white transition-colors">
-          ← Назад
-        </button>
-        <h2 className="mb-4 text-lg font-extrabold tracking-wide text-ink" style={{ textShadow: '0 0 8px rgba(0,229,255,0.25)' }}>
-          Тесты
-        </h2>
+        <button onClick={onBack} className="mb-4 text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
+        <h2 className="mb-4 text-lg font-extrabold tracking-wide text-ink" style={{ textShadow: '0 0 8px rgba(0,229,255,0.25)' }}>Тесты</h2>
         {phase === 'loading' ? (
           <div className="py-10 text-center text-sm text-ink/50">Загрузка вопросов...</div>
         ) : (
@@ -233,57 +338,85 @@ export default function TestsPanelTab({ onBack }: Props) {
     )
   }
 
-  // ---- INTRO ----
-  if (phase === 'intro') {
+  // -- Resume prompt --
+  if (phase === 'resumePrompt' && savedProgress) {
+    const isReview = savedProgress.phase === 'review'
     return (
       <SwipeBack onBack={onBack} innerClassName="mx-auto max-w-md px-4 pb-10 pt-4">
-        <button onClick={onBack} className="mb-4 text-sm font-bold text-neon hover:text-white transition-colors">
-          ← Назад
-        </button>
-        <h2 className="mb-6 text-lg font-extrabold tracking-wide text-ink" style={{ textShadow: '0 0 8px rgba(0,229,255,0.25)' }}>
-          Тесты
-        </h2>
-
-        {totalQuestions === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center rounded-2xl border border-neon/30 bg-card/70 p-10 backdrop-blur-md animate-scaleIn"
-            style={{ boxShadow: '0 0 18px rgba(0,229,255,0.1)' }}
-          >
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl border border-neon/40 bg-neon/10" style={{ boxShadow: '0 0 12px rgba(0,229,255,0.2)' }}>
-              <span className="text-2xl font-extrabold text-neon">?</span>
-            </div>
-            <p className="mt-3 text-center text-sm text-ink/60">
-              Вопросы ещё не подготовлены. Правильные ответы назначаются через админ-панель.
-            </p>
+        <button onClick={onBack} className="mb-4 text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
+        <h2 className="mb-6 text-lg font-extrabold tracking-wide text-ink" style={{ textShadow: '0 0 8px rgba(0,229,255,0.25)' }}>Тесты</h2>
+        <div className="flex flex-col items-center rounded-2xl border border-neon/30 bg-card/70 p-8 backdrop-blur-md animate-scaleIn" style={{ boxShadow: '0 0 18px rgba(0,229,255,0.12)' }}>
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-neon/40 bg-neon/10" style={{ boxShadow: '0 0 12px rgba(0,229,255,0.2)' }}>
+            <RotateCcw size={28} color="#00e5ff" />
           </div>
-        ) : (
-          <div
-            className="flex flex-col items-center rounded-2xl border border-neon/30 bg-card/70 p-8 backdrop-blur-md animate-scaleIn"
-            style={{ boxShadow: '0 0 18px rgba(0,229,255,0.1)' }}
-          >
-            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl border border-neon/40 bg-neon/10" style={{ boxShadow: '0 0 16px rgba(0,229,255,0.25)' }}>
-              <span className="text-3xl font-extrabold text-neon">{totalQuestions}</span>
-            </div>
-            <p className="text-center text-base font-bold text-ink">Доступно вопросов: {totalQuestions}</p>
-            <p className="mt-2 text-center text-xs text-ink/50">Вопросы идут в случайном порядке. Правильный ответ откроется после вашего выбора.</p>
-            <button
-              onClick={startMainTest}
-              className="mt-6 w-full rounded-xl border border-neon/50 bg-neon/15 px-6 py-3 font-extrabold text-neon transition hover:bg-neon/25 active:scale-[0.97]"
-            >
-              Начать тест
-            </button>
-          </div>
-        )}
+          <p className="text-center text-base font-bold text-ink">Продолжить последний тест?</p>
+          <p className="mt-2 text-center text-xs text-ink/50">
+            {isReview ? 'Работа над ошибками' : savedProgress.blockLabel} — вопрос {savedProgress.phase === 'review' ? savedProgress.reviewIndex + 1 : savedProgress.index + 1} из {savedProgress.phase === 'review' ? savedProgress.reviewQueue.length : savedProgress.queue.length}
+          </p>
+          <button onClick={resumeProgress} className="mt-6 w-full rounded-xl border border-neon/50 bg-neon/15 px-6 py-3 font-extrabold text-neon transition hover:bg-neon/25 active:scale-[0.97]">Продолжить</button>
+          <button onClick={dismissSavedProgress} className="mt-3 w-full rounded-xl border border-neon/20 bg-card/50 px-6 py-3 font-bold text-ink/60 transition hover:bg-card/80 active:scale-[0.97]">Выйти в меню</button>
+        </div>
       </SwipeBack>
     )
   }
 
-  // ---- FINISHED (stats + review button) ----
+  // -- Menu (5 blocks) --
+  if (phase === 'menu') {
+    const totalAvailable = allSorted.filter(q => q.correct_answer !== null).length
+    return (
+      <SwipeBack onBack={onBack} innerClassName="mx-auto max-w-md px-4 pb-10 pt-4">
+        <button onClick={onBack} className="mb-4 text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
+        <h2 className="mb-1 text-lg font-extrabold tracking-wide text-ink" style={{ textShadow: '0 0 8px rgba(0,229,255,0.25)' }}>Тесты</h2>
+        <p className="mb-4 text-xs text-ink/50">Выберите блок вопросов</p>
+
+        <div className="flex flex-col gap-3">
+          {BLOCKS.map((block) => {
+            const { available, total } = countAvailable(allSorted, block)
+            const isMega = block.isMega
+            const maxForBlock = isMega ? 440 : BLOCK_SIZE
+            const canStart = available > 0
+            return (
+              <button
+                key={block.id}
+                onClick={() => canStart ? startBlock(block) : undefined}
+                disabled={!canStart}
+                className={`group flex items-center gap-3 rounded-2xl border p-4 text-left backdrop-blur-md transition ${canStart ? 'active:scale-[0.98]' : 'opacity-40'} ${
+                  isMega
+                    ? 'border-error/40 bg-error/10 hover:bg-error/20'
+                    : 'border-neon/25 bg-card/60 hover:bg-neon/10'
+                }`}
+                style={{ boxShadow: isMega ? '0 0 14px rgba(255,68,68,0.1)' : '0 0 10px rgba(0,229,255,0.06)' }}
+              >
+                <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border ${
+                  isMega ? 'border-error/50 bg-error/15' : 'border-neon/40 bg-neon/10'
+                }`} style={{ boxShadow: isMega ? '0 0 10px rgba(255,68,68,0.15)' : '0 0 8px rgba(0,229,255,0.15)' }}>
+                  {isMega ? <Zap size={20} color="#ff4444" /> : <Layers size={20} color="#00e5ff" />}
+                </div>
+                <div className="flex-1">
+                  <p className={`text-sm font-extrabold ${isMega ? 'text-error' : 'text-ink'}`}>{block.label}</p>
+                  <p className="mt-0.5 text-xs text-ink/50">
+                    {available} / {maxForBlock} доступно
+                  </p>
+                </div>
+                <div className="flex-shrink-0">
+                  <div className={`h-1.5 w-16 overflow-hidden rounded-full bg-bg/60`}>
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${isMega ? 'bg-error' : 'bg-neon'}`}
+                      style={{ width: `${Math.min(100, (available / maxForBlock) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </SwipeBack>
+    )
+  }
+
+  // -- Finished --
   if (phase === 'finished') {
-    const isReviewComplete = reviewQueue.length > 0 && reviewAnswers.length >= reviewQueue.length
-    const correct = isReviewComplete ? reviewAnswers.filter(a => a.isCorrect).length + (mainAnswers.filter(a => a.isCorrect).length - reviewQueue.length + reviewQueue.length - reviewStillWrong.size) : mainAnswers.filter(a => a.isCorrect).length
-    const wrong = mainAnswers.length - correct
-    const percentage = mainAnswers.length > 0 ? Math.round((correct / mainAnswers.length) * 100) : 0
+    const isReviewComplete = reviewActive && reviewAnswers.length >= reviewQueue.length
 
     if (isReviewComplete) {
       const stillWrongCount = reviewStillWrong.size
@@ -308,12 +441,12 @@ export default function TestsPanelTab({ onBack }: Props) {
             </div>
             <div className="mt-4 w-full">
               <div className="h-2 w-full overflow-hidden rounded-full bg-bg/60">
-                <div className="h-full rounded-full bg-neon transition-all duration-700" style={{ width: `${mainAnswers.length > 0 ? Math.round(((mainAnswers.length - stillWrongCount) / mainAnswers.length) * 100) : 100}%`, boxShadow: '0 0 8px rgba(0,229,255,0.5)' }} />
+                <div className="h-full rounded-full bg-neon transition-all duration-700" style={{ width: `${queue.length > 0 ? Math.round(((queue.length - stillWrongCount) / queue.length) * 100) : 100}%`, boxShadow: '0 0 8px rgba(0,229,255,0.5)' }} />
               </div>
             </div>
             <div className="mt-5 flex w-full gap-3">
-              <button onClick={() => { setReviewQueue([]); setMainQueue([]); setMainAnswers([]); startMainTest() }} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-neon/50 bg-neon/15 px-4 py-3 font-bold text-neon transition hover:bg-neon/25 active:scale-[0.97]">
-                <RotateCcw size={18} /> Заново
+              <button onClick={backToMenu} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-neon/50 bg-neon/15 px-4 py-3 font-bold text-neon transition hover:bg-neon/25 active:scale-[0.97]">
+                <Layers size={18} /> К блокам
               </button>
               <button onClick={onBack} className="flex-1 rounded-xl border border-neon/30 bg-card/60 px-4 py-3 font-bold text-ink/70 transition hover:bg-card/80 active:scale-[0.97]">Назад</button>
             </div>
@@ -322,7 +455,9 @@ export default function TestsPanelTab({ onBack }: Props) {
       )
     }
 
-    const wrongInMain = mainAnswers.filter(a => !a.isCorrect).length
+    const correct = answers.filter(a => a.isCorrect).length
+    const wrong = answers.length - correct
+    const percentage = answers.length > 0 ? Math.round((correct / answers.length) * 100) : 0
 
     return (
       <SwipeBack onBack={onBack} innerClassName="mx-auto max-w-md px-4 pb-10 pt-4">
@@ -332,6 +467,7 @@ export default function TestsPanelTab({ onBack }: Props) {
             <Award size={32} color="#00e5ff" />
           </div>
           <h2 className="text-lg font-extrabold text-ink">Тест завершён</h2>
+          {activeBlock && <p className="mt-1 text-xs text-ink/50">{activeBlock.label}</p>}
           <div className="mt-5 grid w-full grid-cols-2 gap-3">
             <div className="flex flex-col items-center rounded-xl border border-success/30 bg-success/10 p-3">
               <span className="text-2xl font-extrabold text-success">{correct}</span>
@@ -349,12 +485,9 @@ export default function TestsPanelTab({ onBack }: Props) {
             </div>
           </div>
 
-          {wrongInMain > 0 ? (
-            <button
-              onClick={startReview}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-error/50 bg-error/15 px-4 py-4 font-extrabold text-error transition hover:bg-error/25 active:scale-[0.97]"
-            >
-              <AlertTriangle size={20} /> РАБОТА НАД ОШИБКАМИ ({wrongInMain})
+          {wrong > 0 ? (
+            <button onClick={startReview} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-error/50 bg-error/15 px-4 py-4 font-extrabold text-error transition hover:bg-error/25 active:scale-[0.97]">
+              <AlertTriangle size={20} /> РАБОТА НАД ОШИБКАМИ ({wrong})
             </button>
           ) : (
             <div className="mt-5 w-full rounded-xl border border-success/30 bg-success/10 px-4 py-4 text-center">
@@ -363,33 +496,31 @@ export default function TestsPanelTab({ onBack }: Props) {
           )}
 
           <div className="mt-3 flex w-full gap-3">
-            <button onClick={startMainTest} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-neon/50 bg-neon/15 px-4 py-3 font-bold text-neon transition hover:bg-neon/25 active:scale-[0.97]">
+            <button onClick={() => activeBlock && startBlock(activeBlock)} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-neon/50 bg-neon/15 px-4 py-3 font-bold text-neon transition hover:bg-neon/25 active:scale-[0.97]">
               <RotateCcw size={18} /> Заново
             </button>
-            <button onClick={onBack} className="flex-1 rounded-xl border border-neon/30 bg-card/60 px-4 py-3 font-bold text-ink/70 transition hover:bg-card/80 active:scale-[0.97]">Назад</button>
+            <button onClick={backToMenu} className="flex-1 rounded-xl border border-neon/30 bg-card/60 px-4 py-3 font-bold text-ink/70 transition hover:bg-card/80 active:scale-[0.97]">К блокам</button>
           </div>
         </div>
       </SwipeBack>
     )
   }
 
-  // ---- REVIEW MODE ----
+  // -- Review mode --
   if (phase === 'review') {
     const q = reviewQueue[reviewIdx]
     if (!q) return null
     const isCorrect = reviewRevealed && reviewSelected === q.correct_answer
-    const isWrong = reviewRevealed && reviewSelected !== q.correct_answer
+    const isWrong = reviewRevealed && reviewSelected !== null && reviewSelected !== q.correct_answer
     const progress = { current: reviewIdx + 1, total: reviewQueue.length }
 
     return (
       <SwipeBack onBack={onBack} innerClassName="mx-auto max-w-md px-4 pb-10 pt-3">
         <div className="mb-2 flex items-center justify-between">
           <button onClick={onBack} className="text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
-          <span className="text-xs font-bold text-neon">Работа над ошибками</span>
+          <span className="text-xs font-bold text-error">Работа над ошибками</span>
         </div>
-        <div className="mb-1 flex items-center justify-between text-xs font-bold">
-          <span className="text-neon">{progress.current} / {progress.total}</span>
-        </div>
+        <div className="mb-1 text-xs font-bold text-neon">{progress.current} / {progress.total}</div>
         <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-bg/60">
           <div className="h-full rounded-full bg-error transition-all duration-500" style={{ width: `${(progress.current / progress.total) * 100}%`, boxShadow: '0 0 6px rgba(255,68,68,0.5)' }} />
         </div>
@@ -414,7 +545,7 @@ export default function TestsPanelTab({ onBack }: Props) {
                   className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left text-sm transition ${cls} ${!reviewRevealed ? 'active:scale-[0.98]' : ''}`}
                 >
                   <span className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border text-xs font-bold ${isRight ? 'border-success bg-success text-bg' : isWrongSel ? 'border-error bg-error text-bg' : 'border-neon/40'}`}>
-                    {isRight ? <Check size={12} /> : isWrongSel ? <X size={12} /> : String.fromCharCode(65 + i)}
+                    {isRight ? <Check size={12} /> : isWrongSel ? <X size={12} /> : i + 1}
                   </span>
                   <span className="flex-1">{opt}</span>
                 </button>
@@ -423,19 +554,13 @@ export default function TestsPanelTab({ onBack }: Props) {
           </div>
         </div>
 
-        {/* Feedback line */}
         <div className="mt-2 min-h-[28px] flex items-center">
-          {isCorrect && <span className="flex items-center gap-1 text-sm font-bold text-success"><Check size={14} /> Верно!</span>}
-          {isWrong && <span className="flex items-center gap-1 text-sm font-bold text-error"><X size={14} /> Неправильный ответ</span>}
+          {isCorrect && <span className="flex items-center gap-1 text-sm font-bold text-success animate-fadeIn"><Check size={14} /> Верно!</span>}
+          {isWrong && <span className="flex items-center gap-1 text-sm font-bold text-error animate-fadeIn"><X size={14} /> Неправильный ответ</span>}
         </div>
 
-        {/* Previous button */}
         <div className="mt-2 flex items-center justify-between">
-          <button
-            onClick={goToPrevReview}
-            disabled={reviewIdx === 0}
-            className="flex items-center gap-1 rounded-lg border border-neon/20 bg-card/50 px-3 py-2 text-xs font-bold text-neon transition enabled:hover:bg-neon/10 disabled:opacity-30 active:scale-[0.97]"
-          >
+          <button onClick={goToPrevReview} disabled={reviewIdx === 0} className="flex items-center gap-1 rounded-lg border border-neon/20 bg-card/50 px-3 py-2 text-xs font-bold text-neon transition enabled:hover:bg-neon/10 disabled:opacity-30 active:scale-[0.97]">
             <ChevronLeft size={16} /> Предыдущий
           </button>
           <span className="text-xs text-ink/40">Исправлено: {reviewFixed} · Осталось: {reviewStillWrong.size}</span>
@@ -444,27 +569,24 @@ export default function TestsPanelTab({ onBack }: Props) {
     )
   }
 
-  // ---- PLAYING (main test) ----
-  const q = mainQueue[mainIdx]
+  // -- Playing (main test) --
+  const q = queue[idx]
   if (!q) return null
   const isCorrect = revealed && selected === q.correct_answer
   const isWrong = revealed && selected !== null && selected !== q.correct_answer
-  const progress = { current: mainIdx + 1, total: mainQueue.length }
+  const progress = { current: idx + 1, total: queue.length }
 
   return (
     <SwipeBack onBack={onBack} innerClassName="mx-auto max-w-md px-4 pb-10 pt-3">
-      {/* Top: back + progress */}
       <div className="mb-2 flex items-center justify-between">
         <button onClick={onBack} className="text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
+        {activeBlock && <span className="text-xs font-bold text-ink/40">{activeBlock.label}</span>}
       </div>
-      <div className="mb-1 flex items-center justify-between text-xs font-bold">
-        <span className="text-neon">{progress.current} / {progress.total}</span>
-      </div>
+      <div className="mb-1 text-xs font-bold text-neon">{progress.current} / {progress.total}</div>
       <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-bg/60">
         <div className="h-full rounded-full bg-neon transition-all duration-500" style={{ width: `${(progress.current / progress.total) * 100}%`, boxShadow: '0 0 6px rgba(0,229,255,0.5)' }} />
       </div>
 
-      {/* Question card — compact */}
       <div key={q.question_id} className="animate-slideUp rounded-xl border border-neon/20 bg-card/60 p-4 backdrop-blur-md" style={{ boxShadow: '0 0 10px rgba(0,229,255,0.06)' }}>
         <span className="mb-2 block text-xs font-extrabold text-neon/70">{q.question_id}</span>
         <p className="mb-3 text-sm leading-relaxed text-ink/90">{q.question_text}</p>
@@ -486,7 +608,7 @@ export default function TestsPanelTab({ onBack }: Props) {
                 className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left text-sm transition ${cls} ${!revealed ? 'active:scale-[0.98]' : ''}`}
               >
                 <span className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border text-xs font-bold ${isRight ? 'border-success bg-success text-bg' : isWrongSel ? 'border-error bg-error text-bg' : 'border-neon/40'}`}>
-                  {isRight ? <Check size={12} /> : isWrongSel ? <X size={12} /> : String.fromCharCode(65 + i)}
+                  {isRight ? <Check size={12} /> : isWrongSel ? <X size={12} /> : i + 1}
                 </span>
                 <span className="flex-1">{opt}</span>
               </button>
@@ -495,30 +617,19 @@ export default function TestsPanelTab({ onBack }: Props) {
         </div>
       </div>
 
-      {/* Feedback line — minimal */}
       <div className="mt-2 min-h-[28px] flex items-center">
         {isCorrect && <span className="flex items-center gap-1 text-sm font-bold text-success animate-fadeIn"><Check size={14} /> Верно!</span>}
         {isWrong && <span className="flex items-center gap-1 text-sm font-bold text-error animate-fadeIn"><X size={14} /> Неправильный ответ</span>}
       </div>
 
-      {/* Bottom: previous button */}
       <div className="mt-2 flex items-center justify-between">
-        <button
-          onClick={goToPrev}
-          disabled={mainIdx === 0}
-          className="flex items-center gap-1 rounded-lg border border-neon/20 bg-card/50 px-3 py-2 text-xs font-bold text-neon transition enabled:hover:bg-neon/10 disabled:opacity-30 active:scale-[0.97]"
-        >
+        <button onClick={goToPrev} disabled={idx === 0} className="flex items-center gap-1 rounded-lg border border-neon/20 bg-card/50 px-3 py-2 text-xs font-bold text-neon transition enabled:hover:bg-neon/10 disabled:opacity-30 active:scale-[0.97]">
           <ChevronLeft size={16} /> Предыдущий вопрос
         </button>
-        {mainIdx + 1 < mainQueue.length && revealed && (
-          <button
-            onClick={goToNext}
-            className="flex items-center gap-1 rounded-lg border border-neon/30 bg-neon/10 px-3 py-2 text-xs font-bold text-neon transition hover:bg-neon/20 active:scale-[0.97]"
-          >
-            Далее →
-          </button>
-        )}
       </div>
     </SwipeBack>
   )
 }
+
+
+export default TestsPanelTab
