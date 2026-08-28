@@ -28,6 +28,8 @@ export default function AdminPanel({ onBack }: Props) {
   const [filter, setFilter] = useState<'all' | 'answered' | 'unanswered'>('all')
   const [savingId, setSavingId] = useState<string | null>(null)
   const [localSelections, setLocalSelections] = useState<Record<string, number>>({})
+  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({})
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
 
   const handlePassword = (e: React.FormEvent) => {
     e.preventDefault()
@@ -128,6 +130,7 @@ export default function AdminPanel({ onBack }: Props) {
     const selected = localSelections[qId]
     if (selected === undefined) return
     setSavingId(qId)
+    setSaveErrors(prev => { const n = { ...prev }; delete n[qId]; return n })
     try {
       const updated = await api.setCorrectAnswer(qId, selected)
       setDbQuestions(prev => prev.map(q =>
@@ -140,8 +143,10 @@ export default function AdminPanel({ onBack }: Props) {
         delete next[qId]
         return next
       })
-    } catch {
-      // keep selection on error
+      setSaveSuccess(qId)
+      setTimeout(() => setSaveSuccess(prev => prev === qId ? null : prev), 3000)
+    } catch (err) {
+      setSaveErrors(prev => ({ ...prev, [qId]: err instanceof Error ? err.message : 'Ошибка сохранения' }))
     } finally {
       setSavingId(null)
     }
@@ -312,6 +317,12 @@ export default function AdminPanel({ onBack }: Props) {
                   })}
                 </div>
 
+                {saveErrors[q.id] && (
+                  <p className="mt-2 text-xs font-bold text-error">{saveErrors[q.id]}</p>
+                )}
+                {saveSuccess === q.id && (
+                  <p className="mt-2 text-xs font-bold text-success">Сохранено в базу</p>
+                )}
                 {localSelections[q.id] !== undefined && q.correct_answer === null && (
                   <button
                     onClick={() => handleSave(q.id)}
