@@ -32,13 +32,8 @@ echo ""
 # --- Step 1: Create PostgreSQL table ---------------------------------------
 echo "[2/4] Creating test_questions table in PostgreSQL..."
 
-# Try to read DB connection from environment or common config
-# Adjust these if your credentials are different
-DB_NAME="${DB_NAME:-seroin_app}"
-DB_USER="${DB_USER:-postgres}"
-DB_HOST="${DB_HOST:-localhost}"
-
-psql -U "$DB_USER" -d "$DB_NAME" -h "$DB_HOST" << 'SQL'
+# Table is created by postgres superuser, then privileges granted to seroin_user
+sudo -u postgres psql -d seroin_app << 'SQL'
 CREATE TABLE IF NOT EXISTS test_questions (
   question_id    text        PRIMARY KEY,
   question_text  text        NOT NULL,
@@ -50,6 +45,11 @@ CREATE TABLE IF NOT EXISTS test_questions (
 
 CREATE INDEX IF NOT EXISTS idx_test_questions_correct
   ON test_questions (correct_answer);
+
+GRANT ALL PRIVILEGES ON TABLE test_questions TO seroin_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO seroin_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO seroin_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO seroin_user;
 
 SELECT 'test_questions table ready' AS status;
 SQL
