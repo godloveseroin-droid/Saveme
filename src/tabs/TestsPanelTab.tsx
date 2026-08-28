@@ -390,7 +390,7 @@ export default function TestsPanelTab({ onBack }: Props) {
                   src={blockImages[i]}
                   alt={block.label}
                   className="block w-full h-auto select-none"
-                  style={{ display: 'block', width: '100%', height: 'auto', objectFit: 'contain' }}
+                  style={{ display: 'block', width: '100%', height: 'auto' }}
                   draggable={false}
                 />
               </button>
@@ -617,3 +617,5 @@ export default function TestsPanelTab({ onBack }: Props) {
     </SwipeBack>
   )
 }
+
+export default TestsPanelTab
