@@ -11,7 +11,6 @@ type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' |
 type Banner = { id: Tab; src: string; alt: string }
 
 const banners: Banner[] = [
-  { id: 'tests', src: '/banner-tests.webp', alt: 'Тесты' },
   { id: 'predictions', src: '/banner-predictions.webp', alt: 'Предсказания' },
   { id: 'secret', src: '/banner-secret.webp', alt: 'Секретная комната' },
 ]
