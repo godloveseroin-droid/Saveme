@@ -617,5 +617,3 @@ export default function TestsPanelTab({ onBack }: Props) {
     </SwipeBack>
   )
 }
-
-export default TestsPanelTab
