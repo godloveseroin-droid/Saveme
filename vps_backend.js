@@ -388,6 +388,74 @@ app.post('/api/votes', asyncHandler(async (req, res) => {
 // })
 
 // ============================================================================
+// TEST QUESTIONS — /api/test-questions
+// ============================================================================
+
+// GET /api/test-questions — all questions with correct_answer
+app.get('/api/test-questions', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT question_id, question_text, options, correct_answer FROM test_questions ORDER BY question_id'
+  )
+  res.json(rowsToJson(rows))
+}))
+
+// GET /api/test-questions/active — only questions with correct_answer set
+app.get('/api/test-questions/active', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT question_id, question_text, options, correct_answer FROM test_questions WHERE correct_answer IS NOT NULL ORDER BY question_id'
+  )
+  res.json(rowsToJson(rows))
+}))
+
+// POST /api/test-questions/seed — bulk insert/update questions (preserves existing correct_answer)
+app.post('/api/test-questions/seed', asyncHandler(async (req, res) => {
+  const { questions } = req.body
+  if (!Array.isArray(questions)) {
+    return res.status(400).json({ error: 'questions array is required' })
+  }
+  let inserted = 0
+  let updated = 0
+  for (const q of questions) {
+    if (!q.question_id || !q.question_text || !Array.isArray(q.options)) continue
+    const result = await pool.query(
+      `INSERT INTO test_questions (question_id, question_text, options, correct_answer)
+       VALUES ($1, $2, $3, NULL)
+       ON CONFLICT (question_id) DO UPDATE SET
+         question_text = EXCLUDED.question_text,
+         options = EXCLUDED.options,
+         updated_at = now()
+       WHERE test_questions.correct_answer IS NULL
+       RETURNING (xmax = 0) AS inserted`,
+      [q.question_id, q.question_text, JSON.stringify(q.options)]
+    )
+    if (result.rows.length > 0) {
+      if (result.rows[0].inserted) inserted++
+      else updated++
+    }
+  }
+  res.json({ inserted, updated, total: questions.length })
+}))
+
+// PATCH /api/test-questions/:questionId/correct — set correct answer for a question
+app.patch('/api/test-questions/:questionId/correct', asyncHandler(async (req, res) => {
+  const questionId = decodeURIComponent(req.params.questionId)
+  const { correct_answer } = req.body
+  if (typeof correct_answer !== 'number' || correct_answer < 0) {
+    return res.status(400).json({ error: 'correct_answer must be a non-negative number' })
+  }
+  const { rows } = await pool.query(
+    `UPDATE test_questions SET correct_answer = $2, updated_at = now()
+     WHERE question_id = $1
+     RETURNING question_id, question_text, options, correct_answer`,
+    [questionId, correct_answer]
+  )
+  if (rows.length === 0) {
+    return res.status(404).json({ error: 'question not found' })
+  }
+  res.json(rows[0])
+}))
+
+// ============================================================================
 // ERROR HANDLER — catch-all for unhandled errors
 // ============================================================================
 app.use((err, req, res, next) => {
