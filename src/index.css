@@ -237,3 +237,18 @@ input, textarea, button {
   }
 }
 ::-webkit-scrollbar { width: 0; height: 0; }
+
+@media (max-width: 768px) {
+  .test-banner-button,
+  .test-banner-image {
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    object-fit: initial !important;
+  }
+  .test-banner-image {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: auto !important;
+  }
+}

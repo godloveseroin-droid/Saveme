@@ -382,14 +382,14 @@ export default function TestsPanelTab({ onBack }: Props) {
                 key={block.id}
                 onClick={() => canStart ? startBlock(block) : undefined}
                 disabled={!canStart}
-                className="block w-full p-0 border-0 bg-transparent transition active:scale-[0.98] disabled:opacity-30"
+                className="test-banner-button block w-full p-0 border-0 bg-transparent transition active:scale-[0.98] disabled:opacity-30"
                 style={{ borderRadius: 0, boxShadow: 'none' }}
                 aria-label={block.label}
               >
                 <img
                   src={blockImages[i]}
                   alt={block.label}
-                  className="block w-full h-auto select-none"
+                  className="test-banner-image block w-full h-auto select-none"
                   style={{ display: 'block', width: '100%', height: 'auto' }}
                   draggable={false}
                 />
