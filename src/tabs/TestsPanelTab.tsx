@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import SwipeBack from '../components/SwipeBack'
 import { api, type TestQuestionRow } from '../lib/api'
 import {
-  BLOCKS, BLOCK_SIZE, sortQuestions, questionsForBlock, countAvailable,
+  BLOCKS, sortQuestions, questionsForBlock, countAvailable,
   saveProgress, loadProgress, clearProgress,
   type AnswerRecord, type SavedProgress, type BlockDef,
 } from '../lib/testProgress'
-import { Check, X, ChevronLeft, RotateCcw, Award, TriangleAlert as AlertTriangle, Layers, Zap } from 'lucide-react'
+import { Check, X, ChevronLeft, RotateCcw, Award, TriangleAlert as AlertTriangle, Layers } from 'lucide-react'
 
 type Props = {
   onBack: () => void
@@ -360,53 +360,33 @@ export default function TestsPanelTab({ onBack }: Props) {
     )
   }
 
-  // -- Menu (5 blocks) --
+  // -- Menu (5 blocks as image sprites) --
   if (phase === 'menu') {
-    const totalAvailable = allSorted.filter(q => q.correct_answer !== null).length
     return (
       <SwipeBack onBack={onBack} innerClassName="mx-auto max-w-md px-4 pb-10 pt-4">
         <button onClick={onBack} className="mb-4 text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
-        <h2 className="mb-1 text-lg font-extrabold tracking-wide text-ink" style={{ textShadow: '0 0 8px rgba(0,229,255,0.25)' }}>Тесты</h2>
-        <p className="mb-4 text-xs text-ink/50">Выберите блок вопросов</p>
 
         <div className="flex flex-col gap-3">
-          {BLOCKS.map((block) => {
-            const { available, total } = countAvailable(allSorted, block)
-            const isMega = block.isMega
-            const maxForBlock = isMega ? 440 : BLOCK_SIZE
+          {BLOCKS.map((block, i) => {
+            const { available } = countAvailable(allSorted, block)
             const canStart = available > 0
+            // Sprite sheet: 5 blocks stacked vertically, each is 1/5 of the image height
+            const spritePosition = `${(i / (BLOCKS.length - 1)) * 100}%`
             return (
               <button
                 key={block.id}
                 onClick={() => canStart ? startBlock(block) : undefined}
                 disabled={!canStart}
-                className={`group flex items-center gap-3 rounded-2xl border p-4 text-left backdrop-blur-md transition ${canStart ? 'active:scale-[0.98]' : 'opacity-40'} ${
-                  isMega
-                    ? 'border-error/40 bg-error/10 hover:bg-error/20'
-                    : 'border-neon/25 bg-card/60 hover:bg-neon/10'
-                }`}
-                style={{ boxShadow: isMega ? '0 0 14px rgba(255,68,68,0.1)' : '0 0 10px rgba(0,229,255,0.06)' }}
-              >
-                <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border ${
-                  isMega ? 'border-error/50 bg-error/15' : 'border-neon/40 bg-neon/10'
-                }`} style={{ boxShadow: isMega ? '0 0 10px rgba(255,68,68,0.15)' : '0 0 8px rgba(0,229,255,0.15)' }}>
-                  {isMega ? <Zap size={20} color="#ff4444" /> : <Layers size={20} color="#00e5ff" />}
-                </div>
-                <div className="flex-1">
-                  <p className={`text-sm font-extrabold ${isMega ? 'text-error' : 'text-ink'}`}>{block.label}</p>
-                  <p className="mt-0.5 text-xs text-ink/50">
-                    {available} / {maxForBlock} доступно
-                  </p>
-                </div>
-                <div className="flex-shrink-0">
-                  <div className={`h-1.5 w-16 overflow-hidden rounded-full bg-bg/60`}>
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${isMega ? 'bg-error' : 'bg-neon'}`}
-                      style={{ width: `${Math.min(100, (available / maxForBlock) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              </button>
+                className="relative block w-full overflow-hidden rounded-2xl border border-neon/20 transition active:scale-[0.98] disabled:opacity-30"
+                style={{
+                  aspectRatio: '5 / 1',
+                  backgroundImage: 'url(/test-blocks-placeholder.webp)',
+                  backgroundSize: '100% 500%',
+                  backgroundPosition: `center ${spritePosition}`,
+                  backgroundRepeat: 'no-repeat',
+                }}
+                aria-label={block.label}
+              />
             )
           })}
         </div>
