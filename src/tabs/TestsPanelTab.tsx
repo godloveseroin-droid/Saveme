@@ -6,7 +6,7 @@ import {
   saveProgress, loadProgress, clearProgress,
   type AnswerRecord, type SavedProgress, type BlockDef,
 } from '../lib/testProgress'
-import { Check, X, ChevronLeft, RotateCcw, Award, TriangleAlert as AlertTriangle, Layers } from 'lucide-react'
+import { Check, X, ChevronLeft, ChevronRight, RotateCcw, Award, TriangleAlert as AlertTriangle, Layers, Sword, Shield, Flame, Sparkles, Crown } from 'lucide-react'
 
 type Props = {
   onBack: () => void
@@ -360,39 +360,67 @@ export default function TestsPanelTab({ onBack }: Props) {
     )
   }
 
-  // -- Menu (5 blocks as plain clickable images, no frames) --
+  // -- Menu (5 blocks as styled HTML/CSS buttons) --
   if (phase === 'menu') {
-    const blockImages = [
-      '/assets/test-block-1.webp',
-      '/assets/test-block-2.webp',
-      '/assets/test-block-3.webp',
-      '/assets/test-block-4.webp',
-      '/assets/test-marathon.webp',
+    const blockThemes = [
+      { color: '#38bdf8', glow: 'rgba(56,189,248,0.25)', icon: Sword },
+      { color: '#ef4444', glow: 'rgba(239,68,68,0.25)', icon: Shield },
+      { color: '#22c55e', glow: 'rgba(34,197,94,0.25)', icon: Flame },
+      { color: '#a855f7', glow: 'rgba(168,85,247,0.25)', icon: Sparkles },
+      { color: '#f59e0b', glow: 'rgba(245,158,11,0.25)', icon: Crown },
     ]
+    const rangeLabels = ['1–110', '111–220', '221–330', '331–440', 'Все 440 вопросов']
     return (
       <SwipeBack onBack={onBack} innerClassName="mx-auto w-full max-w-[520px] px-3 pb-6 pt-4">
-        <button onClick={onBack} className="mb-3 text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
+        <button onClick={onBack} className="mb-4 text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-3">
           {BLOCKS.map((block, i) => {
             const { available } = countAvailable(allSorted, block)
             const canStart = available > 0
+            const theme = blockThemes[i]
+            const Icon = theme.icon
             return (
               <button
                 key={block.id}
                 onClick={() => canStart ? startBlock(block) : undefined}
                 disabled={!canStart}
-                className="test-banner-button block w-full p-0 border-0 bg-transparent transition active:scale-[0.98] disabled:opacity-30"
-                style={{ borderRadius: 0, boxShadow: 'none' }}
+                className="group relative flex items-center gap-4 overflow-hidden rounded-xl border p-4 transition-all duration-200 active:scale-[0.97] disabled:opacity-30 disabled:active:scale-100"
+                style={{
+                  borderColor: `${theme.color}40`,
+                  background: 'linear-gradient(135deg, rgba(15,18,25,0.95) 0%, rgba(10,12,18,0.98) 100%)',
+                  boxShadow: `0 0 12px ${theme.glow}, inset 0 0 0 1px ${theme.color}15`,
+                }}
                 aria-label={block.label}
               >
-                <img
-                  src={blockImages[i]}
-                  alt={block.label}
-                  className="test-banner-image block w-full h-auto select-none"
-                  style={{ display: 'block', width: '100%', height: 'auto' }}
-                  draggable={false}
+                <div
+                  className="absolute left-0 top-0 h-full w-1.5"
+                  style={{ background: `linear-gradient(180deg, ${theme.color}, ${theme.color}40)` }}
                 />
+                <div
+                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg border transition-transform duration-200 group-hover:scale-110 group-active:scale-95"
+                  style={{
+                    borderColor: `${theme.color}50`,
+                    background: `${theme.color}12`,
+                    boxShadow: `0 0 10px ${theme.glow}`,
+                  }}
+                >
+                  <Icon size={24} color={theme.color} />
+                </div>
+                <div className="flex flex-1 flex-col items-center text-center">
+                  <span className="text-base font-extrabold text-white" style={{ textShadow: `0 0 8px ${theme.glow}` }}>
+                    {block.label}
+                  </span>
+                  <span className="mt-0.5 text-xs font-bold" style={{ color: `${theme.color}cc` }}>
+                    {rangeLabels[i]}
+                  </span>
+                </div>
+                <div
+                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border opacity-40 transition-opacity group-hover:opacity-80"
+                  style={{ borderColor: `${theme.color}40` }}
+                >
+                  <ChevronRight size={16} color={theme.color} />
+                </div>
               </button>
             )
           })}
