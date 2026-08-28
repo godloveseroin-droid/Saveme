@@ -32,15 +32,6 @@ export type Meme = {
   created_at?: string
 }
 
-export type TeamStatsRow = {
-  worker_name: string
-  weight: number
-  happiness: number
-  balance: number
-  title_level: number
-  title_xp: number
-}
-
 export type ChatMessage = {
   id: string
   user_id: string
@@ -51,8 +42,6 @@ export type ChatMessage = {
 }
 
 export type PredictionCount = { name: string; count: number }
-
-export type VoteChoices = { choice_1: string; choice_2: string; choice_3: string }
 
 export const api = {
   // Employees
@@ -68,19 +57,6 @@ export const api = {
     apiFetch<Worker>('/api/workers', { method: 'POST', body: JSON.stringify({ name, gender }) }),
   removeWorker: (name: string) =>
     apiFetch<void>(`/api/workers/${encodeURIComponent(name)}`, { method: 'DELETE' }),
-
-  // Team stats
-  getTeamStats: () => apiFetch<TeamStatsRow[]>('/api/team-stats'),
-  adjustTeamStats: (worker_name: string, weight: number, happiness: number, balance: number) =>
-    apiFetch<TeamStatsRow>('/api/team-stats/adjust', {
-      method: 'POST',
-      body: JSON.stringify({ worker_name, weight, happiness, balance }),
-    }),
-  updateTitle: (workerName: string, title_level: number, title_xp: number) =>
-    apiFetch<TeamStatsRow>(`/api/team-stats/${encodeURIComponent(workerName)}/title`, {
-      method: 'PATCH',
-      body: JSON.stringify({ title_level, title_xp }),
-    }),
 
   // Memes
   getMemes: () => apiFetch<Meme[]>('/api/memes'),
@@ -116,20 +92,4 @@ export const api = {
     }),
   getMessageCount: (day: string) =>
     apiFetch<{ count: number }>(`/api/chat/messages/count?day=${day}`),
-
-  // Votes
-  getVote: (gameDay: string, voterName: string) =>
-    apiFetch<VoteChoices | null>(`/api/votes?gameDay=${encodeURIComponent(gameDay)}&voterName=${encodeURIComponent(voterName)}`),
-  submitVote: (game_day: string, voter_name: string, question: string, choices: string[]) =>
-    apiFetch<VoteChoices & { game_day: string; voter_name: string; question: string }>('/api/votes', {
-      method: 'POST',
-      body: JSON.stringify({
-        game_day,
-        voter_name,
-        question,
-        choice_1: choices[0],
-        choice_2: choices[1],
-        choice_3: choices[2],
-      }),
-    }),
 }

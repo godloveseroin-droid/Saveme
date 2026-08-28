@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Bell } from 'lucide-react'
 import { getDailyNews, getWorkerOfWeek } from '../lib/workers'
-import TeamLifePanel from '../components/TeamLifePanel'
-import GamePanel from '../components/GamePanel'
-import SwipeBack from '../components/SwipeBack'
 import { useApp } from '../context/AppContext'
 
 type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'team'
@@ -71,91 +68,9 @@ function useCountdown(getMs: () => number): string {
 }
 
 export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
-  const [showTeamLife, setShowTeamLife] = useState(false)
-  const [showNewPanel, setShowNewPanel] = useState(false)
-  const [newPanelFade, setNewPanelFade] = useState(false)
-  const [homeDimmed, setHomeDimmed] = useState(false)
-
-  const openTeamLife = () => {
-    setShowTeamLife(true)
-    requestAnimationFrame(() => {
-      window.scrollTo(0, 0)
-    })
-  }
-
-  const closeTeamLife = () => {
-    setShowTeamLife(false)
-  }
-
-  const openNewPanel = () => {
-    setHomeDimmed(true)
-    setTimeout(() => {
-      setShowNewPanel(true)
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setNewPanelFade(true)
-        })
-      })
-    }, 250)
-  }
-
-  const closeNewPanel = () => {
-    setNewPanelFade(false)
-    setTimeout(() => {
-      setShowNewPanel(false)
-      setHomeDimmed(false)
-    }, 250)
-  }
-
   const { workers } = useApp()
   const newsCountdown = useCountdown(msUntilNextMidnight)
   const workerCountdown = useCountdown(msUntilNextMonday)
-
-  if (showNewPanel) {
-    return (
-      <>
-        <div
-          className="fixed inset-0 z-40 bg-black"
-          style={{ opacity: homeDimmed ? 0.6 : 0, transition: 'opacity 250ms ease-out' }}
-        />
-        <div
-          className="fixed inset-0 z-50 overflow-y-auto"
-          style={{
-            opacity: newPanelFade ? 1 : 0,
-            transition: 'opacity 250ms ease-out',
-          }}
-        >
-          <div
-            className="mx-auto max-w-md"
-            style={{
-              backgroundImage: 'url(/new-panel-inner.webp)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center top',
-              minHeight: '100dvh',
-            }}
-          >
-            <div className="relative z-10 px-5 pb-8 pt-12">
-              <GamePanel onBack={closeNewPanel} />
-            </div>
-          </div>
-        </div>
-      </>
-    )
-  }
-
-  if (showTeamLife) {
-    return (
-      <SwipeBack onBack={closeTeamLife} innerClassName="mx-auto max-w-md px-5 pb-8 pt-12">
-        <button
-          onClick={() => setShowTeamLife(false)}
-          className="mb-4 flex items-center gap-2 text-sm font-bold text-neon hover:text-white transition-colors"
-        >
-          ← Назад
-        </button>
-        <TeamLifePanel />
-      </SwipeBack>
-    )
-  }
 
   return (
     <div className="relative mx-auto max-w-md px-5 pb-8 pt-12">
@@ -189,14 +104,11 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
         className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-neon/40 bg-black/50 py-2.5 text-sm font-extrabold text-neon backdrop-blur-md transition-transform active:scale-[0.97]"
         style={{ boxShadow: '0 0 16px rgba(0,229,255,0.18)' }}
       >
-        💬 ФЛУДИЛКА
+        💬 ФЛЮДИЛКА
       </button>
 
       <div className="space-y-4">
-        <BannerButton src="/banner-zayavki.webp" alt="Заявки" onClick={() => onNavigate('applications')} />
-        <BannerButton src="/banner-team-life.webp" alt="Панель жизни команды" onClick={() => setShowTeamLife(true)} />
-        <BannerButton src="/banner-new-panel.webp" alt="Новая панель" onClick={openNewPanel} />
-        {banners.slice(1).map((banner) => (
+        {banners.map((banner) => (
           <BannerButton key={banner.id} src={banner.src} alt={banner.alt} onClick={() => onNavigate(banner.id)} />
         ))}
       </div>
