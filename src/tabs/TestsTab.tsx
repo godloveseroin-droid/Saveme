@@ -3,10 +3,11 @@ import SwipeBack from '../components/SwipeBack'
 type Props = {
   onOpenApplications: () => void
   onOpenArticles: () => void
+  onOpenTests: () => void
   onBack: () => void
 }
 
-export default function TestsTab({ onOpenApplications, onOpenArticles, onBack }: Props) {
+export default function TestsTab({ onOpenApplications, onOpenArticles, onOpenTests, onBack }: Props) {
   return (
     <SwipeBack onBack={onBack} innerClassName="mx-auto max-w-md px-3 pb-10 pt-10">
       <button
@@ -16,10 +17,10 @@ export default function TestsTab({ onOpenApplications, onOpenArticles, onBack }:
         ← Назад
       </button>
 
-      <div className="flex gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <button
           onClick={onOpenApplications}
-          className="group relative flex-1 overflow-hidden rounded-2xl border border-neon/40 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.96]"
+          className="group relative overflow-hidden rounded-2xl border border-neon/40 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.96]"
           style={{ boxShadow: '0 0 16px rgba(0,229,255,0.15)' }}
         >
           <img
@@ -31,12 +32,24 @@ export default function TestsTab({ onOpenApplications, onOpenArticles, onBack }:
 
         <button
           onClick={onOpenArticles}
-          className="group relative flex-1 overflow-hidden rounded-2xl border border-neon/40 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.96]"
+          className="group relative overflow-hidden rounded-2xl border border-neon/40 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.96]"
           style={{ boxShadow: '0 0 16px rgba(0,229,255,0.15)' }}
         >
           <img
             src="/banner-articles.webp"
             alt="Статьи"
+            className="block aspect-square w-full object-cover transition duration-300 group-hover:brightness-110"
+          />
+        </button>
+
+        <button
+          onClick={onOpenTests}
+          className="group relative col-span-2 mx-auto w-[calc(50%-4px)] overflow-hidden rounded-2xl border border-neon/40 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.96]"
+          style={{ boxShadow: '0 0 16px rgba(0,229,255,0.15)' }}
+        >
+          <img
+            src="/banner-tests-card.webp"
+            alt="Тесты"
             className="block aspect-square w-full object-cover transition duration-300 group-hover:brightness-110"
           />
         </button>
