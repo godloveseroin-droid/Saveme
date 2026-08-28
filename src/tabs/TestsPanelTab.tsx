@@ -360,34 +360,31 @@ export default function TestsPanelTab({ onBack }: Props) {
     )
   }
 
-  // -- Menu (5 blocks as image sprites) --
+  // -- Menu (5 blocks as separate images) --
   if (phase === 'menu') {
     return (
-      <SwipeBack onBack={onBack} innerClassName="mx-auto max-w-md px-4 pb-10 pt-4">
-        <button onClick={onBack} className="mb-4 text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
+      <SwipeBack onBack={onBack} innerClassName="w-full px-3 pb-6 pt-4">
+        <button onClick={onBack} className="mb-3 text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
           {BLOCKS.map((block, i) => {
             const { available } = countAvailable(allSorted, block)
             const canStart = available > 0
-            // Sprite sheet: 5 blocks stacked vertically in a 1024x1536 image.
-            // Each block is ~1024x307, aspect ratio ~3.34:1
-            const spritePosition = `${(i / (BLOCKS.length - 1)) * 100}%`
             return (
               <button
                 key={block.id}
                 onClick={() => canStart ? startBlock(block) : undefined}
                 disabled={!canStart}
-                className="relative block w-full overflow-hidden rounded-2xl border border-neon/20 transition active:scale-[0.98] disabled:opacity-30"
-                style={{
-                  aspectRatio: '1024 / 307',
-                  backgroundImage: 'url(/test-blocks.webp)',
-                  backgroundSize: '100% 500%',
-                  backgroundPosition: `center ${spritePosition}`,
-                  backgroundRepeat: 'no-repeat',
-                }}
+                className="block w-full overflow-hidden rounded-lg transition active:scale-[0.98] disabled:opacity-30"
                 aria-label={block.label}
-              />
+              >
+                <img
+                  src={`/test-block-${i}.webp`}
+                  alt={block.label}
+                  className="block w-full h-auto select-none"
+                  draggable={false}
+                />
+              </button>
             )
           })}
         </div>
