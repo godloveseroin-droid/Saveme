@@ -4,10 +4,11 @@ type Props = {
   onOpenApplications: () => void
   onOpenArticles: () => void
   onOpenTests: () => void
+  onOpenAdmin: () => void
   onBack: () => void
 }
 
-export default function TestsTab({ onOpenApplications, onOpenArticles, onOpenTests, onBack }: Props) {
+export default function TestsTab({ onOpenApplications, onOpenArticles, onOpenTests, onOpenAdmin, onBack }: Props) {
   return (
     <SwipeBack onBack={onBack} innerClassName="mx-auto max-w-md px-3 pb-10 pt-10">
       <button
@@ -52,6 +53,16 @@ export default function TestsTab({ onOpenApplications, onOpenArticles, onOpenTes
             alt="Тесты"
             className="block aspect-square w-full object-cover transition duration-300 group-hover:brightness-110"
           />
+        </button>
+      </div>
+
+      <div className="mt-6 flex justify-center">
+        <button
+          onClick={onOpenAdmin}
+          className="rounded-xl border border-neon/30 bg-card/60 px-6 py-3 text-sm font-extrabold text-neon backdrop-blur-md transition hover:bg-neon/15 active:scale-[0.97]"
+          style={{ boxShadow: '0 0 12px rgba(0,229,255,0.1)' }}
+        >
+          Админ-панель
         </button>
       </div>
     </SwipeBack>

@@ -8,9 +8,10 @@ import SecretTab from './tabs/SecretTab'
 import FludilkaTab from './tabs/FludilkaTab'
 import TestsTab from './tabs/TestsTab'
 import TestsPanelTab from './tabs/TestsPanelTab'
+import AdminPanel from './components/AdminPanel'
 import SwipeBack from './components/SwipeBack'
 
-type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests' | 'testsPanel'
+type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests' | 'testsPanel' | 'adminPanel'
 
 function Shell() {
   const [tab, setTab] = useState<Tab | 'home'>('home')
@@ -82,11 +83,15 @@ function Shell() {
             onOpenApplications={() => openTab('applications')}
             onOpenArticles={() => openTab('articles')}
             onOpenTests={() => openTab('testsPanel')}
+            onOpenAdmin={() => openTab('adminPanel')}
             onBack={goHome}
           />
         )}
         {tab === 'testsPanel' && (
           <TestsPanelTab onBack={() => openTab('tests')} />
+        )}
+        {tab === 'adminPanel' && (
+          <AdminPanel onBack={() => openTab('tests')} />
         )}
       </main>
     </div>

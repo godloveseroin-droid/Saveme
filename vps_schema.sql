@@ -230,5 +230,20 @@ END;
 $$;
 
 -- ============================================================================
+-- 11. test_questions — questions for Tests panel (Знания → Тесты)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS test_questions (
+  question_id    text        PRIMARY KEY,
+  question_text  text        NOT NULL,
+  options        jsonb       NOT NULL DEFAULT '[]'::jsonb,
+  correct_answer int         CHECK (correct_answer IS NULL OR correct_answer >= 0),
+  created_at     timestamptz DEFAULT now(),
+  updated_at     timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_test_questions_correct
+  ON test_questions (correct_answer);
+
+-- ============================================================================
 -- END OF SCHEMA
 -- ============================================================================

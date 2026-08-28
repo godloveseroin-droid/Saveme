@@ -54,6 +54,13 @@ export type PredictionCount = { name: string; count: number }
 
 export type VoteChoices = { choice_1: string; choice_2: string; choice_3: string }
 
+export type TestQuestionRow = {
+  question_id: string
+  question_text: string
+  options: string[]
+  correct_answer: number | null
+}
+
 export const api = {
   // Employees
   getEmployees: () => apiFetch<Employee[]>('/api/employees'),
@@ -131,5 +138,19 @@ export const api = {
         choice_2: choices[1],
         choice_3: choices[2],
       }),
+    }),
+
+  // Test questions
+  getTestQuestions: () => apiFetch<TestQuestionRow[]>('/api/test-questions'),
+  getActiveTestQuestions: () => apiFetch<TestQuestionRow[]>('/api/test-questions/active'),
+  seedTestQuestions: (questions: { question_id: string; question_text: string; options: string[] }[]) =>
+    apiFetch<{ inserted: number; updated: number; total: number }>('/api/test-questions/seed', {
+      method: 'POST',
+      body: JSON.stringify({ questions }),
+    }),
+  setCorrectAnswer: (questionId: string, correct_answer: number) =>
+    apiFetch<TestQuestionRow>(`/api/test-questions/${encodeURIComponent(questionId)}/correct`, {
+      method: 'PATCH',
+      body: JSON.stringify({ correct_answer }),
     }),
 }
