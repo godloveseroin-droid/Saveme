@@ -143,14 +143,27 @@ export const api = {
   // Test questions
   getTestQuestions: () => apiFetch<TestQuestionRow[]>('/api/test-questions'),
   getActiveTestQuestions: () => apiFetch<TestQuestionRow[]>('/api/test-questions/active'),
-  seedTestQuestions: (questions: { question_id: string; question_text: string; options: string[] }[]) =>
-    apiFetch<{ inserted: number; updated: number; total: number }>('/api/test-questions/seed', {
-      method: 'POST',
-      body: JSON.stringify({ questions }),
-    }),
+  seedTestQuestions: async (questions: { question_id: string; question_text: string; options: string[] }[]) => {
+    const BATCH_SIZE = 50
+    let totalInserted = 0
+    let totalUpdated = 0
+    for (let i = 0; i < questions.length; i += BATCH_SIZE) {
+      const batch = questions.slice(i, i + BATCH_SIZE)
+      const result = await apiFetch<{ inserted: number; updated: number; total: number }>('/api/test-questions/seed', {
+        method: 'POST',
+        body: JSON.stringify({ questions: batch }),
+      })
+      totalInserted += result.inserted
+      totalUpdated += result.updated
+    }
+    return { inserted: totalInserted, updated: totalUpdated, total: questions.length }
+  },
   setCorrectAnswer: (questionId: string, correct_answer: number) =>
     apiFetch<TestQuestionRow>(`/api/test-questions/${encodeURIComponent(questionId)}/correct`, {
       method: 'PATCH',
       body: JSON.stringify({ correct_answer }),
     }),
 }
+
+
+export { api }

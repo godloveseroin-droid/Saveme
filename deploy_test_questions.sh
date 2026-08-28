@@ -102,7 +102,6 @@ app.post('/api/test-questions/seed', asyncHandler(async (req, res) => {
          question_text = EXCLUDED.question_text,
          options = EXCLUDED.options,
          updated_at = now()
-       WHERE test_questions.correct_answer IS NULL
        RETURNING (xmax = 0) AS inserted`,
       [q.question_id, q.question_text, JSON.stringify(q.options)]
     )

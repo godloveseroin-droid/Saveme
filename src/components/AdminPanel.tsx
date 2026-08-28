@@ -72,8 +72,8 @@ export default function AdminPanel({ onBack }: Props) {
       setSeedMsg(`Загружено: ${result.inserted} новых, ${result.updated} обновлено из ${result.total}`)
       const rows = await api.getTestQuestions()
       setDbQuestions(rows as DbQuestion[])
-    } catch {
-      setSeedMsg('Ошибка при загрузке вопросов')
+    } catch (err) {
+      setSeedMsg(err instanceof Error ? `Ошибка: ${err.message}` : 'Ошибка при загрузке вопросов')
     } finally {
       setSeeding(false)
     }
