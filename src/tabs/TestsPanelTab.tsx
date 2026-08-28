@@ -6,7 +6,7 @@ import {
   saveProgress, loadProgress, clearProgress,
   type AnswerRecord, type SavedProgress, type BlockDef,
 } from '../lib/testProgress'
-import { Check, X, ChevronLeft, RotateCcw, Award, AlertTriangle, Layers, Zap } from 'lucide-react'
+import { Check, X, ChevronLeft, RotateCcw, Award, TriangleAlert as AlertTriangle, Layers, Zap } from 'lucide-react'
 
 type Props = {
   onBack: () => void
@@ -630,6 +630,3 @@ export default function TestsPanelTab({ onBack }: Props) {
     </SwipeBack>
   )
 }
-
-
-export default TestsPanelTab
