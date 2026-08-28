@@ -360,8 +360,15 @@ export default function TestsPanelTab({ onBack }: Props) {
     )
   }
 
-  // -- Menu (5 blocks as separate images) --
+  // -- Menu (5 blocks as separate cropped images) --
   if (phase === 'menu') {
+    const blockImages = [
+      '/assets/test-block-1.webp',
+      '/assets/test-block-2.webp',
+      '/assets/test-block-3.webp',
+      '/assets/test-block-4.webp',
+      '/assets/test-marathon.webp',
+    ]
     return (
       <SwipeBack onBack={onBack} innerClassName="w-full px-3 pb-6 pt-4">
         <button onClick={onBack} className="mb-3 text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
@@ -376,13 +383,12 @@ export default function TestsPanelTab({ onBack }: Props) {
                 onClick={() => canStart ? startBlock(block) : undefined}
                 disabled={!canStart}
                 className="block w-full overflow-hidden rounded-lg transition active:scale-[0.98] disabled:opacity-30"
-                style={{ aspectRatio: '1024 / 307' }}
                 aria-label={block.label}
               >
                 <img
-                  src={`/test-block-${i}.webp`}
+                  src={blockImages[i]}
                   alt={block.label}
-                  className="block h-full w-full select-none object-cover"
+                  className="block w-full h-auto select-none"
                   draggable={false}
                 />
               </button>
