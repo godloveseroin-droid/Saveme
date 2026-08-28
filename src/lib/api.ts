@@ -164,6 +164,3 @@ export const api = {
       body: JSON.stringify({ correct_answer }),
     }),
 }
-
-
-export { api }
