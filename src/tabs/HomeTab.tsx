@@ -6,14 +6,13 @@ import GamePanel from '../components/GamePanel'
 import SwipeBack from '../components/SwipeBack'
 import { useApp } from '../context/AppContext'
 
-type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka'
+type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests'
 
 type Banner = { id: Tab; src: string; alt: string }
 
 const banners: Banner[] = [
-  { id: 'applications', src: '/banner-zayavki.webp', alt: 'Заявки' },
+  { id: 'tests', src: '/banner-tests.webp', alt: 'Тесты' },
   { id: 'predictions', src: '/banner-predictions.webp', alt: 'Предсказания' },
-  { id: 'articles', src: '/banner-articles.webp', alt: 'Статьи' },
   { id: 'secret', src: '/banner-secret.webp', alt: 'Секретная комната' },
 ]
 
@@ -192,10 +191,10 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
       </button>
 
       <div className="space-y-4">
-        <BannerButton src="/banner-zayavki.webp" alt="Заявки" onClick={() => onNavigate('applications')} />
+        <BannerButton src="/banner-tests.webp" alt="Тесты" onClick={() => onNavigate('tests')} />
         <BannerButton src="/banner-team-life.webp" alt="Панель жизни команды" onClick={() => setShowTeamLife(true)} />
         <BannerButton src="/banner-new-panel.webp" alt="Новая панель" onClick={openNewPanel} />
-        {banners.slice(1).map((banner) => (
+        {banners.map((banner) => (
           <BannerButton key={banner.id} src={banner.src} alt={banner.alt} onClick={() => onNavigate(banner.id)} />
         ))}
       </div>

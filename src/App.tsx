@@ -6,9 +6,10 @@ import PredictionsTab from './tabs/PredictionsTab'
 import ArticlesTab from './tabs/ArticlesTab'
 import SecretTab from './tabs/SecretTab'
 import FludilkaTab from './tabs/FludilkaTab'
+import TestsTab from './tabs/TestsTab'
 import SwipeBack from './components/SwipeBack'
 
-type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka'
+type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests'
 
 function Shell() {
   const [tab, setTab] = useState<Tab | 'home'>('home')
@@ -74,6 +75,13 @@ function Shell() {
           <SwipeBack onBack={goHome} innerClassName="mx-auto max-w-md px-4 pb-4 pt-10">
             <FludilkaTab onBack={goHome} />
           </SwipeBack>
+        )}
+        {tab === 'tests' && (
+          <TestsTab
+            onOpenApplications={() => openTab('applications')}
+            onOpenArticles={() => openTab('articles')}
+            onBack={goHome}
+          />
         )}
       </main>
     </div>
