@@ -67,6 +67,28 @@ export type KnowledgeNumber = {
   updated_at: string
 }
 
+export type MiniGameProfile = {
+  user_id: string
+  level: number
+  xp: number
+  currentXp: number
+  neededXp: number
+  coins: number
+  title: string
+}
+
+export type MiniGameProgress = {
+  game_number: number
+  completed: boolean
+  best_score: number
+  played_at: string
+}
+
+export type MiniGameData = {
+  profile: MiniGameProfile
+  progress: MiniGameProgress[]
+}
+
 export const api = {
   // Employees
   getEmployees: () => apiFetch<Employee[]>('/api/employees'),
@@ -192,5 +214,46 @@ export const api = {
     const body = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(body.error || `API ${res.status}`)
     return body as KnowledgeNumber
+  },
+
+  // Mini-games (served by Supabase Edge Function)
+  getMiniGameData: async (userId: string): Promise<MiniGameData> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mini-games?userId=${encodeURIComponent(userId)}`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || `API ${res.status}`)
+    }
+    return res.json()
+  },
+  addMiniGameRewards: async (userId: string, addXp: number, addCoins: number): Promise<MiniGameProfile> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mini-games`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ userId, addXp, addCoins }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || `API ${res.status}`)
+    return body.profile as MiniGameProfile
+  },
+  upsertMiniGameProgress: async (userId: string, gameNumber: number, completed: boolean, bestScore: number): Promise<MiniGameProgress> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mini-games`
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ userId, gameNumber, completed, bestScore }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || `API ${res.status}`)
+    return body as MiniGameProgress
   },
 }

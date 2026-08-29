@@ -11,6 +11,7 @@ import TestsTab from './tabs/TestsTab'
 import TestsPanelTab from './tabs/TestsPanelTab'
 import AdminPanel from './components/AdminPanel'
 import NumbersPanel from './components/NumbersPanel'
+import MiniGamesPanel from './components/MiniGamesPanel'
 import SwipeBack from './components/SwipeBack'
 
 type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests' | 'testsPanel' | 'adminPanel' | 'numbers' | 'newSection'
@@ -106,16 +107,8 @@ function Shell() {
           </SwipeBack>
         )}
         {tab === 'newSection' && (
-          <SwipeBack onBack={goHome} innerClassName="mx-auto max-w-md px-5 pb-10 pt-12">
-            <button
-              onClick={goHome}
-              className="mb-6 flex items-center gap-2 text-sm font-bold text-neon hover:text-white transition-colors"
-            >
-              ← Назад
-            </button>
-            <div className="flex min-h-[60vh] items-center justify-center">
-              <p className="text-sm text-ink-muted">Раздел в разработке</p>
-            </div>
+          <SwipeBack onBack={goHome} innerClassName="mx-auto max-w-md px-4 pb-10 pt-6">
+            <MiniGamesPanel onBack={goHome} />
           </SwipeBack>
         )}
       </main>

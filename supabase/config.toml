@@ -1,2 +1,5 @@
 [functions.knowledge-numbers]
 verify_jwt = false
+
+[functions.mini-games]
+verify_jwt = false
