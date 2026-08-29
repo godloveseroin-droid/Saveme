@@ -24,10 +24,29 @@ function seededRandom(seed: string): number {
 
 // XP system helpers (must match mini-games edge function)
 const LEVEL_TITLES: Record<number, string> = {
-  1: "Новичок", 2: "Ученик", 3: "Знаток", 4: "Искатель", 5: "Опытный",
-  6: "Мастер", 7: "Эксперт", 8: "Вершитель", 9: "Хранитель знаний", 10: "Легенда",
+  1: "Генеральный директор паники", 2: "Магистр ордена лени", 3: "Заслуженный соня галактики",
+  4: "Эксперт по ничегонеделанию", 5: "Профессиональный душнила", 6: "Король косяков",
+  7: "Главный по тарелочкам", 8: "Министр чаепития", 9: "Хранитель офисного холодильника",
+  10: "Повелитель дедлайнов", 11: "Чемпион по прокрастинации", 12: "Граф Дратути",
+  13: "Барон Авось", 14: "Ведущий специалист по мемам", 15: "Адвокат котиков",
+  16: "Легендарный пожиратель пиццы", 17: "Верховный главнокомандующий диванными войсками",
+  18: "Маршал ленивых выходных", 19: "Заслуженный грабленаступатель", 20: "Доктор диванных наук",
+  21: "Мастер спорта по поеданию вкусняшек", 22: "Профессиональный искатель приключений на свою голову",
+  23: "Главный консультант по глупым вопросам", 24: "Шериф кофейного автомата",
+  25: "Президент клуба любителей поспать", 26: "Босс финального уровня лени",
+  27: "Хранитель священного пульта", 28: "Султан подушек", 29: "Рыцарь круглого торта",
+  30: "Навигатор по холодильнику", 31: "Эксперт по созданию неловких ситуаций",
+  32: "Почетный донор нервных клеток", 33: "Генератор случайных мыслей",
+  34: "Директор по свежести воздуха", 35: "Инженер человеческих косяков",
+  36: "Командир отряда полуночников", 37: "Великий комбинатор отговорок",
+  38: "Магистр белой и черной магии лени", 39: "Главный архитектор воздушных замков",
+  40: "Заслуженный артист разговорного жанра у кулера", 41: "Профессор околовсяческих наук",
+  42: "Капитан очевидность второго ранга", 43: "Повелитель чайных пакетиков",
+  44: "Гуру спонтанных покупок", 45: "Секретный агент одеялка",
+  46: "Менеджер по связям с космосом", 47: "Укротитель будильников",
+  48: "Магистр кошачьей психологии", 49: "Абсолютный чемпион по залипанию в телефон",
 };
-const MAX_LEVEL = 10;
+const MAX_LEVEL = 49;
 
 function xpForLevel(level: number): number { return level * 100; }
 
@@ -38,7 +57,7 @@ function recalcLevel(xp: number): { level: number; title: string } {
     const needed = xpForLevel(level);
     if (remaining >= needed) { remaining -= needed; level++; } else break;
   }
-  return { level, title: LEVEL_TITLES[level] || LEVEL_TITLES[MAX_LEVEL] };
+  return { level, title: level >= MAX_LEVEL ? LEVEL_TITLES[MAX_LEVEL] : (LEVEL_TITLES[level] || LEVEL_TITLES[1]) };
 }
 
 // Pick a deterministic question for a given date
@@ -295,8 +314,9 @@ Deno.serve(async (req: Request) => {
           .eq("user_id", userId)
           .maybeSingle();
 
+        let shouldAward = false;
         if (!existingReward) {
-          await supabase
+          const { error: rewardInsertErr } = await supabase
             .from("daily_poll_rewards")
             .insert({
               daily_poll_id: todayPoll.id,
@@ -306,14 +326,18 @@ Deno.serve(async (req: Request) => {
               xp_awarded: 10,
               title_xp_awarded: 2,
             });
+          shouldAward = !rewardInsertErr;
         } else if (!existingReward.participation_rewarded) {
-          await supabase
+          const { error: rewardUpdateErr } = await supabase
             .from("daily_poll_rewards")
             .update({ participation_rewarded: true, xp_awarded: 10, title_xp_awarded: 2 })
             .eq("id", existingReward.id);
+          shouldAward = !rewardUpdateErr;
         }
 
-        await addXpToProfile(supabase, userId, 10);
+        if (shouldAward) {
+          await addXpToProfile(supabase, userId, 10);
+        }
 
         return new Response(JSON.stringify({
           success: true,
@@ -463,7 +487,7 @@ async function addXpToProfile(supabase: ReturnType<typeof createClient>, userId:
   if (!profile) {
     const { data: newProfile } = await supabase
       .from("mini_game_profile")
-      .insert({ user_id: userId, level: 1, xp: 0, coins: 0, title: "Новичок" })
+      .insert({ user_id: userId, level: 1, xp: 0, coins: 0, title: LEVEL_TITLES[1] })
       .select("user_id, xp, coins, title")
       .single();
     profile = newProfile;
