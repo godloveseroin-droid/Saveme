@@ -6,7 +6,7 @@ import GamePanel from '../components/GamePanel'
 import SwipeBack from '../components/SwipeBack'
 import { useApp } from '../context/AppContext'
 
-type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests'
+type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests' | 'newSection'
 
 type Banner = { id: Tab; src: string; alt: string }
 
@@ -202,6 +202,7 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
 
       <div className="space-y-4">
         <BannerButton src="/banner-tests.webp" alt="Тесты" onClick={() => onNavigate('tests')} />
+        <BannerButton src="/banner-new-section.webp" alt="Новый раздел" onClick={() => onNavigate('newSection')} />
         <BannerButton src="/banner-team-life.webp" alt="Панель жизни команды" onClick={() => setShowTeamLife(true)} />
         <BannerButton src="/banner-new-panel.webp" alt="Новая панель" onClick={openNewPanel} />
         {banners.map((banner) => (
