@@ -237,11 +237,6 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
             >
               В РАЗРАБОТКЕ
             </span>
-            <span
-              className="mt-1.5 rounded-lg bg-neon/15 px-3 py-1 text-xs font-bold text-neon/80 backdrop-blur-sm"
-            >
-              Игровая комната
-            </span>
           </div>
         </div>
         <BannerButton src="/banner-team-life.webp" alt="Панель жизни команды" onClick={() => setShowTeamLife(true)} />
