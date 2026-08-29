@@ -98,7 +98,6 @@ export type DailyPollCandidate = {
 export type DailyPollToday = {
   pollId: number
   question: string
-  candidates: string[]
   userVote: string[] | null
   votedAt: string | null
 }

@@ -6,19 +6,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-// Russia timezone (UTC+3) — server-side date determination so all users see the same day
+// Russia timezone (UTC+3) — server-side date so all users see the same day
 function getRussiaDate(date: Date = new Date()): string {
   const russiaTime = new Date(date.getTime() + (3 * 60 * 60 * 1000));
   return russiaTime.toISOString().slice(0, 10);
 }
 
-// Russia hour (for 08:00 check)
-function getRussiaHour(date: Date = new Date()): number {
-  const russiaTime = new Date(date.getTime() + (3 * 60 * 60 * 1000));
-  return russiaTime.getUTCHours();
-}
-
-// Seedable random based on date + index — deterministic candidate selection
+// Seedable random — deterministic question selection per day
 function seededRandom(seed: string): number {
   let h = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -47,37 +41,6 @@ function recalcLevel(xp: number): { level: number; title: string } {
   return { level, title: LEVEL_TITLES[level] || LEVEL_TITLES[MAX_LEVEL] };
 }
 
-function currentLevelXP(xp: number) {
-  const { level, title } = recalcLevel(xp);
-  let spent = 0;
-  for (let l = 1; l < level; l++) spent += xpForLevel(l);
-  const currentXp = xp - spent;
-  const neededXp = level >= MAX_LEVEL ? currentXp : xpForLevel(level);
-  return { level, currentXp, neededXp, title };
-}
-
-// Default worker list (must match frontend data.ts)
-const DEFAULT_WORKERS = [
-  "Шигапова З.М.", "Дикая С.И.", "Терлецкая Т.А.", "Тимшин Д.С.", "Пономарева Е.Е.",
-  "Бенвовская Ю.С.", "Билык И.Е.", "Усенко А.Н.", "Шомесова Е.П.", "Тарабукина Н.Б.",
-  "Майерс Н.А.", "Пруткевич Е.Р.", "Гутче А.И.", "Гаврилюк Е.В.", "Карпюк О.В.",
-  "Капустина О.Н.", "Пруткевич О.В.", "Гутче Н.С.", "Батманов И.А.", "Заколодяжная И.В.",
-  "Усенко В.А.", "Кетова В.В.", "Радина Е.А.", "Красоцкая А.Н.",
-];
-
-// Pick 3 deterministic candidates for a given date
-function pickCandidates(dateStr: string, availableWorkers: string[]): string[] {
-  const pool = availableWorkers.length >= 3 ? availableWorkers : DEFAULT_WORKERS;
-  const indices = pool.map((_, i) => i);
-  // Fisher-Yates shuffle with seeded random
-  const seed = dateStr;
-  for (let i = indices.length - 1; i > 0; i--) {
-    const r = seededRandom(seed + ":" + i) % (i + 1);
-    [indices[i], indices[r]] = [indices[r], indices[i]];
-  }
-  return [pool[indices[0]], pool[indices[1]], pool[indices[2]]];
-}
-
 // Pick a deterministic question for a given date
 function pickQuestionIndex(dateStr: string, count: number): number {
   return seededRandom(dateStr + ":question") % count;
@@ -90,21 +53,19 @@ const PLACEMENT_REWARDS: Record<number, { xp: number; titleXp: number }> = {
   3: { xp: 10, titleXp: 1 },
 };
 
-// Count votes per candidate and determine placement
+// Count votes per candidate and determine placement across ALL voted candidates
 function computeResults(
-  votes: { selected_candidates: string[] }[],
-  candidates: string[]
+  votes: { selected_candidates: string[] }[]
 ): { candidate: string; votes: number; placement: number }[] {
   const voteCounts: Record<string, number> = {};
-  for (const c of candidates) voteCounts[c] = 0;
   for (const v of votes) {
     for (const c of v.selected_candidates) {
       if (voteCounts[c] !== undefined) voteCounts[c]++;
+      else voteCounts[c] = 1;
     }
   }
-  // Sort by votes desc, then alphabetically (stable tiebreak)
-  const ranked = candidates
-    .map((c) => ({ candidate: c, votes: voteCounts[c] }))
+  const ranked = Object.entries(voteCounts)
+    .map(([candidate, v]) => ({ candidate, votes: v }))
     .sort((a, b) => b.votes - a.votes || a.candidate.localeCompare(b.candidate));
   return ranked.map((r, i) => ({ ...r, placement: i + 1 }));
 }
@@ -123,7 +84,6 @@ Deno.serve(async (req: Request) => {
 
     const url = new URL(req.url);
     const method = req.method;
-    const action = url.searchParams.get("action");
 
     // ─── GET: get poll state for current user ───
     if (method === "GET") {
@@ -139,15 +99,14 @@ Deno.serve(async (req: Request) => {
       yesterdayDate.setDate(yesterdayDate.getDate() - 1);
       const yesterdayStr = getRussiaDate(yesterdayDate);
 
-      // Get or create today's poll
+      // Get or create today's poll (question only — no pre-selected candidates)
       let { data: todayPoll } = await supabase
         .from("daily_polls")
-        .select("id, question_id, poll_date, candidate_1, candidate_2, candidate_3")
+        .select("id, question_id, poll_date")
         .eq("poll_date", todayStr)
         .maybeSingle();
 
       if (!todayPoll) {
-        // Get active questions
         const { data: questions } = await supabase
           .from("daily_poll_questions")
           .select("id, question")
@@ -162,25 +121,17 @@ Deno.serve(async (req: Request) => {
 
         const qIdx = pickQuestionIndex(todayStr, questions.length);
         const question = questions[qIdx];
-        const candidates = pickCandidates(todayStr, DEFAULT_WORKERS);
 
         const { data: newPoll, error: pollErr } = await supabase
           .from("daily_polls")
-          .insert({
-            question_id: question.id,
-            poll_date: todayStr,
-            candidate_1: candidates[0],
-            candidate_2: candidates[1],
-            candidate_3: candidates[2],
-          })
-          .select("id, question_id, poll_date, candidate_1, candidate_2, candidate_3")
+          .insert({ question_id: question.id, poll_date: todayStr })
+          .select("id, question_id, poll_date")
           .single();
 
         if (pollErr || !newPoll) {
-          // Race condition: another request created it — fetch again
           const { data: retryPoll } = await supabase
             .from("daily_polls")
-            .select("id, question_id, poll_date, candidate_1, candidate_2, candidate_3")
+            .select("id, question_id, poll_date")
             .eq("poll_date", todayStr)
             .maybeSingle();
           todayPoll = retryPoll;
@@ -195,14 +146,12 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Get today's question text
       const { data: todayQuestion } = await supabase
         .from("daily_poll_questions")
         .select("question")
         .eq("id", todayPoll.question_id)
         .single();
 
-      // Get user's vote for today
       const { data: todayVote } = await supabase
         .from("daily_poll_user_votes")
         .select("selected_candidates, voted_at")
@@ -210,10 +159,10 @@ Deno.serve(async (req: Request) => {
         .eq("user_id", userId)
         .maybeSingle();
 
-      // Get yesterday's poll + results
+      // Yesterday's poll + results
       const { data: yesterdayPoll } = await supabase
         .from("daily_polls")
-        .select("id, question_id, poll_date, candidate_1, candidate_2, candidate_3")
+        .select("id, question_id, poll_date")
         .eq("poll_date", yesterdayStr)
         .maybeSingle();
 
@@ -230,10 +179,8 @@ Deno.serve(async (req: Request) => {
           .select("selected_candidates")
           .eq("daily_poll_id", yesterdayPoll.id);
 
-        const candidates = [yesterdayPoll.candidate_1, yesterdayPoll.candidate_2, yesterdayPoll.candidate_3];
-        const results = computeResults(yVotes || [], candidates);
+        const results = computeResults(yVotes || []);
 
-        // Get user's vote for yesterday
         const { data: yUserVote } = await supabase
           .from("daily_poll_user_votes")
           .select("selected_candidates")
@@ -241,7 +188,6 @@ Deno.serve(async (req: Request) => {
           .eq("user_id", userId)
           .maybeSingle();
 
-        // Get user's reward record for yesterday
         const { data: yReward } = await supabase
           .from("daily_poll_rewards")
           .select("participation_rewarded, result_rewarded, xp_awarded, title_xp_awarded")
@@ -262,7 +208,6 @@ Deno.serve(async (req: Request) => {
         today: {
           pollId: todayPoll.id,
           question: todayQuestion?.question || "",
-          candidates: [todayPoll.candidate_1, todayPoll.candidate_2, todayPoll.candidate_3],
           userVote: todayVote?.selected_candidates || null,
           votedAt: todayVote?.voted_at || null,
         },
@@ -297,24 +242,14 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        // Get today's poll
         const { data: todayPoll } = await supabase
           .from("daily_polls")
-          .select("id, candidate_1, candidate_2, candidate_3")
+          .select("id")
           .eq("poll_date", todayStr)
           .maybeSingle();
 
         if (!todayPoll) {
           return new Response(JSON.stringify({ error: "Опрос не найден" }), {
-            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        // Validate candidates
-        const validCandidates = [todayPoll.candidate_1, todayPoll.candidate_2, todayPoll.candidate_3];
-        const allValid = selectedCandidates.every((c) => validCandidates.includes(c));
-        if (!allValid) {
-          return new Response(JSON.stringify({ error: "Недопустимый кандидат" }), {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
@@ -333,7 +268,6 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        // Insert vote
         const { error: voteErr } = await supabase
           .from("daily_poll_user_votes")
           .insert({
@@ -379,7 +313,6 @@ Deno.serve(async (req: Request) => {
             .eq("id", existingReward.id);
         }
 
-        // Add XP to mini_game_profile
         await addXpToProfile(supabase, userId, 10);
 
         return new Response(JSON.stringify({
@@ -399,7 +332,7 @@ Deno.serve(async (req: Request) => {
 
         const { data: yPoll } = await supabase
           .from("daily_polls")
-          .select("id, candidate_1, candidate_2, candidate_3")
+          .select("id")
           .eq("poll_date", yesterdayStr)
           .maybeSingle();
 
@@ -409,7 +342,6 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        // Check if user voted yesterday
         const { data: yUserVote } = await supabase
           .from("daily_poll_user_votes")
           .select("selected_candidates")
@@ -428,7 +360,6 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        // Check if already claimed results reward
         const { data: yReward } = await supabase
           .from("daily_poll_rewards")
           .select("id, result_rewarded, xp_awarded, title_xp_awarded")
@@ -448,16 +379,13 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        // Compute results
         const { data: yVotes } = await supabase
           .from("daily_poll_user_votes")
           .select("selected_candidates")
           .eq("daily_poll_id", yPoll.id);
 
-        const candidates = [yPoll.candidate_1, yPoll.candidate_2, yPoll.candidate_3];
-        const results = computeResults(yVotes || [], candidates);
+        const results = computeResults(yVotes || []);
 
-        // Calculate placement rewards for user's selected candidates
         let totalXp = 0;
         let totalTitleXp = 0;
         const breakdown: { candidate: string; placement: number; xp: number; titleXp: number }[] = [];
@@ -472,7 +400,6 @@ Deno.serve(async (req: Request) => {
           }
         }
 
-        // Update reward record
         if (yReward) {
           await supabase
             .from("daily_poll_rewards")
@@ -483,7 +410,6 @@ Deno.serve(async (req: Request) => {
             })
             .eq("id", yReward.id);
         } else {
-          // User voted but somehow no reward record — create one
           await supabase
             .from("daily_poll_rewards")
             .insert({
@@ -496,7 +422,6 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        // Add XP to profile
         if (totalXp > 0) {
           await addXpToProfile(supabase, userId, totalXp);
         }
@@ -528,7 +453,6 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-// Helper: add XP to mini_game_profile (with level recalculation)
 async function addXpToProfile(supabase: ReturnType<typeof createClient>, userId: string, xpToAdd: number): Promise<void> {
   let { data: profile } = await supabase
     .from("mini_game_profile")

@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { Check, Trophy, Gift, Loader as Loader2 } from 'lucide-react'
 import { api, type DailyPollState, type DailyPollClaimResult } from '../lib/api'
 import { useApp } from '../context/AppContext'
+import { workersList } from '../lib/data'
 
 type Props = { onBack: () => void }
 
 const PLACEMENT_ICONS = ['🥇', '🥈', '🥉']
+const MAX_SELECTION = 3
 
 export default function DailyPollGame({ onBack }: Props) {
   const { currentUser } = useApp()
@@ -14,7 +16,6 @@ export default function DailyPollGame({ onBack }: Props) {
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [voting, setVoting] = useState(false)
-  const [voteMsg, setVoteMsg] = useState('')
   const [claiming, setClaiming] = useState(false)
   const [claimResult, setClaimResult] = useState<DailyPollClaimResult | null>(null)
   const [resultsClaimed, setResultsClaimed] = useState(false)
@@ -24,11 +25,9 @@ export default function DailyPollGame({ onBack }: Props) {
     try {
       const data = await api.getDailyPollState(currentUser.id)
       setState(data)
-      // If user already voted today, sync selected
       if (data.today.userVote) {
         setSelected(data.today.userVote)
       }
-      // Check if yesterday's results already claimed
       if (data.yesterday?.reward?.result_rewarded) {
         setResultsClaimed(true)
       }
@@ -42,10 +41,10 @@ export default function DailyPollGame({ onBack }: Props) {
   useEffect(() => { void loadState() }, [loadState])
 
   const toggleCandidate = (name: string) => {
-    if (state?.today.userVote) return // already voted
+    if (state?.today.userVote) return
     setSelected((prev) => {
       if (prev.includes(name)) return prev.filter((c) => c !== name)
-      if (prev.length >= 3) return prev
+      if (prev.length >= MAX_SELECTION) return prev
       return [...prev, name]
     })
   }
@@ -55,9 +54,7 @@ export default function DailyPollGame({ onBack }: Props) {
     setVoting(true)
     setError('')
     try {
-      const result = await api.voteDailyPoll(currentUser.id, selected)
-      setVoteMsg(result.message || 'Голос учтён!')
-      // Reload state to reflect vote
+      await api.voteDailyPoll(currentUser.id, selected)
       await loadState()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка голосования')
@@ -74,7 +71,6 @@ export default function DailyPollGame({ onBack }: Props) {
       const result = await api.claimDailyPollResults(currentUser.id)
       setClaimResult(result)
       setResultsClaimed(true)
-      // Reload state to update profile
       await loadState()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка получения награды')
@@ -111,6 +107,7 @@ export default function DailyPollGame({ onBack }: Props) {
 
   const hasVoted = !!state?.today.userVote
   const yesterday = state?.yesterday
+  const allWorkers = workersList.map((w) => w.name)
 
   return (
     <div className="mx-auto max-w-md px-4 pb-10 pt-6">
@@ -142,7 +139,7 @@ export default function DailyPollGame({ onBack }: Props) {
           <p className="mb-3 text-sm font-bold text-ink/90">{yesterday.question}</p>
 
           <div className="space-y-2">
-            {yesterday.results.map((r, i) => {
+            {yesterday.results.slice(0, 3).map((r, i) => {
               const isSelectedByUser = yesterday.userVote?.includes(r.candidate)
               return (
                 <div
@@ -166,7 +163,6 @@ export default function DailyPollGame({ onBack }: Props) {
             })}
           </div>
 
-          {/* Claim results button */}
           {yesterday.userVote && !resultsClaimed && (
             <button
               onClick={handleClaimResults}
@@ -178,7 +174,6 @@ export default function DailyPollGame({ onBack }: Props) {
             </button>
           )}
 
-          {/* Show claim result */}
           {claimResult && claimResult.totalXp > 0 && (
             <div className="mt-3 rounded-lg border border-neon/30 bg-neon/10 p-3 text-center">
               <p className="text-xs font-bold text-neon">Награда получена!</p>
@@ -213,36 +208,45 @@ export default function DailyPollGame({ onBack }: Props) {
       {state && (
         <div className="rounded-2xl border border-neon/30 bg-card/60 p-4 backdrop-blur-md" style={{ boxShadow: '0 0 18px rgba(0,229,255,0.1)' }}>
           <p className="text-[10px] font-bold tracking-widest text-neon">ВОПРОС ДНЯ</p>
-          <h2 className="mt-1.5 mb-4 text-base font-extrabold leading-snug text-ink">{state.today.question}</h2>
+          <h2 className="mt-1.5 mb-3 text-base font-extrabold leading-snug text-ink">{state.today.question}</h2>
 
-          <div className="space-y-2.5">
-            {state.today.candidates.map((name, i) => {
+          {!hasVoted && (
+            <p className="mb-3 text-xs font-bold text-ink-muted">
+              Выберите до {MAX_SELECTION} человек:
+            </p>
+          )}
+
+          {/* Full employee list — 2-column grid */}
+          <div className="grid grid-cols-2 gap-2">
+            {allWorkers.map((name) => {
               const isSelected = selected.includes(name)
-              const isVoted = hasVoted
               const wasChosen = state.today.userVote?.includes(name)
+              const isMaxed = !hasVoted && selected.length >= MAX_SELECTION && !isSelected
               return (
                 <button
                   key={name}
                   onClick={() => toggleCandidate(name)}
-                  disabled={isVoted}
-                  className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all ${
-                    isVoted
+                  disabled={hasVoted || isMaxed}
+                  className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all ${
+                    hasVoted
                       ? wasChosen
                         ? 'border-neon/50 bg-neon/15'
-                        : 'border-line/30 bg-black/20 opacity-50'
+                        : 'border-line/20 bg-black/20 opacity-40'
                       : isSelected
                         ? 'border-neon/60 bg-neon/15 active:scale-95'
-                        : 'border-line/40 bg-black/20 hover:border-neon/30 active:scale-95'
+                        : isMaxed
+                          ? 'border-line/20 bg-black/20 opacity-30'
+                          : 'border-line/40 bg-black/20 hover:border-neon/30 active:scale-95'
                   }`}
                 >
-                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-extrabold ${
+                  <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
                     isSelected || wasChosen
                       ? 'border-neon bg-neon text-black'
-                      : 'border-line/50 text-ink-muted'
+                      : 'border-line/50'
                   }`}>
-                    {isSelected || wasChosen ? <Check size={15} /> : i + 1}
+                    {(isSelected || wasChosen) && <Check size={13} />}
                   </div>
-                  <span className={`text-sm font-bold ${isSelected || wasChosen ? 'text-ink' : 'text-ink/80'}`}>
+                  <span className={`truncate text-[11px] font-bold ${isSelected || wasChosen ? 'text-ink' : 'text-ink/80'}`}>
                     {name}
                   </span>
                 </button>
@@ -267,7 +271,7 @@ export default function DailyPollGame({ onBack }: Props) {
           ) : (
             <>
               <div className="mt-3 flex items-center justify-between text-[10px] font-bold">
-                <span className="text-ink-muted">Выбрано: {selected.length} / 3</span>
+                <span className="text-ink-muted">Выбрано: {selected.length} / {MAX_SELECTION}</span>
                 {selected.length > 0 && (
                   <button onClick={() => setSelected([])} className="text-neon/60 hover:text-neon">
                     Очистить
@@ -285,19 +289,8 @@ export default function DailyPollGame({ onBack }: Props) {
               </button>
             </>
           )}
-
-          {voteMsg && !hasVoted && (
-            <p className="mt-2 text-center text-xs text-success">{voteMsg}</p>
-          )}
         </div>
       )}
-
-      {/* Reward info */}
-      <div className="mt-3 rounded-xl border border-line/30 bg-black/20 p-3 text-center">
-        <p className="text-[10px] font-bold text-ink-muted">
-          За участие: +10 XP · За место: +10-30 XP
-        </p>
-      </div>
     </div>
   )
 }
