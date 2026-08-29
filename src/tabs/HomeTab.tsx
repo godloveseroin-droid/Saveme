@@ -68,6 +68,7 @@ function useCountdown(getMs: () => number): string {
 }
 
 export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
+  const { workers, currentUser, switchUser } = useApp()
   const [showTeamLife, setShowTeamLife] = useState(false)
   const [showNewPanel, setShowNewPanel] = useState(false)
   const [newPanelFade, setNewPanelFade] = useState(false)
@@ -104,7 +105,6 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
     }, 250)
   }
 
-  const { workers } = useApp()
   const newsCountdown = useCountdown(msUntilNextMidnight)
   const workerCountdown = useCountdown(msUntilNextMonday)
 
@@ -161,7 +161,18 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
           <p className="text-[10px] font-bold tracking-[0.25em] text-neon">АМАЛЬГАМА</p>
           <h1 className="mt-1 text-2xl font-extrabold text-ink">Главная</h1>
         </div>
-        <img src="/app-icon.webp" alt="" className="h-11 w-11 rounded-full border border-neon/40 object-cover" />
+        <div className="flex items-center gap-2">
+          {currentUser && (
+            <button
+              onClick={switchUser}
+              className="max-w-[140px] truncate rounded-full border border-neon/40 bg-neon/10 px-3 py-1.5 text-xs font-bold text-neon transition-transform active:scale-95"
+              title="Сменить пользователя"
+            >
+              {currentUser.name}
+            </button>
+          )}
+          <img src="/app-icon.webp" alt="" className="h-11 w-11 rounded-full border border-neon/40 object-cover" />
+        </div>
       </header>
 
       <div className="mb-3 flex items-start gap-3 rounded-2xl border border-neon/30 bg-neon/5 p-3 backdrop-blur-md" style={{ boxShadow: '0 0 22px rgba(0,229,255,0.12)' }}>

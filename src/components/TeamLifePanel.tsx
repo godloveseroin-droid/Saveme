@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Zap, ChevronDown, Plus, X, LockKeyhole, Search } from 'lucide-react'
+import { Zap, ChevronDown, Plus, X, LockKeyhole } from 'lucide-react'
 import { useApp, type TeamStats } from '../context/AppContext'
 import { type Worker } from '../lib/data'
 import { getItem, setItem, todayKey } from '../lib/storage'
@@ -10,7 +10,6 @@ type WorkerStats = Record<string, Stats>
 type DailyActions = { date: string; left: number }
 
 const ACTIONS_KEY = 'team-life-actions-v3'
-const MY_NAME_KEY = 'team-life-my-name'
 const DAILY_LIMIT = 3
 
 const BASE_STATS: Stats = { weight: 0, happiness: 0, balance: 0 }
@@ -75,12 +74,11 @@ function computeLeaders(stats: WorkerStats, workers: Worker[]): Leader[] {
 }
 
 export default function TeamLifePanel() {
-  const { isAdmin, unlock, lock, workers, teamStats, adjustTeamStats, adjustTitleXP } = useApp()
+  const { isAdmin, unlock, lock, workers, teamStats, adjustTeamStats, adjustTitleXP, currentUser } = useApp()
   const stats = teamStats as TeamStats
-  const [actionsLeft, setActionsLeft] = useState<number>(loadActionsLeft)
-  const [myName, setMyName] = useState<string>(() => getItem<string | null>(MY_NAME_KEY, null) ?? '')
-  const [whoOpen, setWhoOpen] = useState(false)
-  const [whoSearch, setWhoSearch] = useState('')
+  const actionsLeftSource = useState<number>(loadActionsLeft)
+  const [actionsLeft, setActionsLeft] = actionsLeftSource
+  const myName = currentUser?.name ?? ''
   const [selectedWorker, setSelectedWorker] = useState<string>('')
   const [toast, setToast] = useState<string | null>(null)
   const [titleToast, setTitleToast] = useState<string | null>(null)
@@ -93,10 +91,6 @@ export default function TeamLifePanel() {
   const [adminWeight, setAdminWeight] = useState('')
   const [adminHappiness, setAdminHappiness] = useState('')
   const [adminBalance, setAdminBalance] = useState('')
-
-  useEffect(() => {
-    if (!myName) setWhoOpen(true)
-  }, [myName])
 
   useEffect(() => {
     if (!toast) return
@@ -117,19 +111,6 @@ export default function TeamLifePanel() {
   const myTitleXP = myStats?.titleXP ?? 0
   const myMaxed = isMaxTitle(myTitleLevel)
   const myTitle = getTitle(myTitleLevel)
-
-  const whoFiltered = useMemo(() => {
-    const q = whoSearch.trim().toLowerCase()
-    if (!q) return workers
-    return workers.filter((w) => w.name.toLowerCase().includes(q))
-  }, [workers, whoSearch])
-
-  const pickName = (name: string): void => {
-    setMyName(name)
-    setItem(MY_NAME_KEY, name)
-    setWhoOpen(false)
-    setWhoSearch('')
-  }
 
   const handleAction = (action: ActionDef): void => {
     if (!selectedWorker) return
@@ -241,7 +222,6 @@ export default function TeamLifePanel() {
               <p className="truncate text-sm font-black text-ink">{myName}</p>
               <p className="mt-0.5 truncate text-xs font-bold text-neon" style={{ textShadow: '0 0 6px rgba(0,229,255,0.3)' }}>🏅 {myTitle}</p>
             </div>
-            <button onClick={() => setWhoOpen(true)} className="ml-2 shrink-0 rounded-lg border border-line px-2 py-1 text-[10px] font-bold text-ink-muted active:scale-95">Сменить</button>
           </div>
           <div className="mt-2 flex items-center gap-2">
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/60">
@@ -385,44 +365,6 @@ export default function TeamLifePanel() {
         <div className="fixed left-1/2 top-1/3 z-[55] -translate-x-1/2 rounded-2xl border border-neon/40 bg-black/90 px-6 py-4 text-center backdrop-blur-md animate-scaleIn" style={{ boxShadow: '0 0 30px rgba(0,229,255,0.4)' }}>
           <p className="text-xs font-black text-neon" style={{ textShadow: '0 0 8px rgba(0,229,255,0.5)' }}>🏅 НОВОЕ ЗВАНИЕ</p>
           <p className="mt-1 text-sm font-extrabold text-ink">{getTitle(myTitleLevel)}</p>
-        </div>
-      )}
-
-      {/* WHO ARE YOU modal */}
-      {whoOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-fadeIn" onClick={() => { if (myName) setWhoOpen(false) }}>
-          <div className="flex max-h-[80vh] w-full max-w-sm flex-col rounded-2xl border border-neon/25 bg-card p-5 animate-scaleIn" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-extrabold text-ink">КТО ТЫ?</h2>
-              {myName && <button onClick={() => setWhoOpen(false)} className="text-ink-muted"><X size={19} /></button>}
-            </div>
-            <p className="mb-3 text-xs text-ink-muted">Выбери своё ФИО из списка</p>
-
-            <div className="mb-3 flex h-10 items-center rounded-lg border border-line bg-input px-3">
-              <Search size={16} color="#8b92a3" />
-              <input
-                value={whoSearch}
-                onChange={(e) => setWhoSearch(e.target.value)}
-                placeholder="Поиск ФИО..."
-                className="ml-2 min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
-              />
-              {whoSearch && <button onClick={() => setWhoSearch('')} className="text-ink-muted"><X size={15} /></button>}
-            </div>
-
-            <div className="flex-1 space-y-1 overflow-y-auto">
-              {whoFiltered.length === 0 ? (
-                <p className="py-6 text-center text-sm text-ink-muted">Ничего не найдено</p>
-              ) : whoFiltered.map((w) => (
-                <button
-                  key={w.name}
-                  onClick={() => pickName(w.name)}
-                  className={`block w-full rounded-lg border px-3 py-2.5 text-left text-sm font-bold transition-colors active:scale-[0.98] ${myName === w.name ? 'border-neon/50 bg-neon/10 text-neon' : 'border-line bg-input/50 text-ink hover:bg-neon/5'}`}
-                >
-                  {w.name}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 

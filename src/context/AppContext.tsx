@@ -2,9 +2,15 @@ import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, 
 import { Employee, Meme } from '../types'
 import { workersList as fallbackWorkers, type Worker } from '../lib/data'
 import { api, type TeamStatsRow } from '../lib/api'
+import { getItem, setItem, removeItem } from '../lib/storage'
+import { setCurrentPlayerName as setGamePlayerName } from '../lib/gameStorage'
 
 type Stats = { weight: number; happiness: number; balance: number; titleLevel: number; titleXP: number }
 export type TeamStats = Record<string, Stats>
+
+export type CurrentUser = { id: string; name: string }
+
+const CURRENT_USER_KEY = 'current-user'
 
 type AppContextValue = {
   employees: Employee[]
@@ -14,6 +20,10 @@ type AppContextValue = {
   isAdmin: boolean
   loading: boolean
   error: string | null
+  currentUser: CurrentUser | null
+  login: (name: string) => boolean
+  switchUser: () => void
+  logout: () => void
   unlock: (password: string) => boolean
   lock: () => void
   addEmployee: (data: Omit<Employee, 'id' | 'created_at'>) => Promise<boolean>
@@ -52,6 +62,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => {
+    return getItem<CurrentUser | null>(CURRENT_USER_KEY, null)
+  })
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -92,6 +105,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   const lock = (): void => setIsAdmin(false)
+
+  const login = useCallback((name: string): boolean => {
+    const id = name.trim()
+    if (!id) return false
+    const user: CurrentUser = { id, name: id }
+    setCurrentUser(user)
+    setItem(CURRENT_USER_KEY, user)
+    setGamePlayerName(id)
+    return true
+  }, [])
+
+  const switchUser = useCallback((): void => {
+    setCurrentUser(null)
+    removeItem(CURRENT_USER_KEY)
+  }, [])
+
+  const logout = useCallback((): void => {
+    setCurrentUser(null)
+    removeItem(CURRENT_USER_KEY)
+    setGamePlayerName(null)
+  }, [])
 
   const addEmployee = async (data: Omit<Employee, 'id' | 'created_at'>): Promise<boolean> => {
     try {
@@ -180,8 +214,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   const value = useMemo(
-    () => ({ employees, workers, teamStats, memes, isAdmin, loading, error, unlock, lock, addEmployee, deleteEmployee, addWorker, removeWorker, adjustTeamStats, adjustTitleXP, addMeme, refresh }),
-    [employees, workers, teamStats, memes, isAdmin, loading, error, refresh],
+    () => ({ employees, workers, teamStats, memes, isAdmin, loading, error, currentUser, login, switchUser, logout, unlock, lock, addEmployee, deleteEmployee, addWorker, removeWorker, adjustTeamStats, adjustTitleXP, addMeme, refresh }),
+    [employees, workers, teamStats, memes, isAdmin, loading, error, currentUser, login, switchUser, logout, refresh],
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

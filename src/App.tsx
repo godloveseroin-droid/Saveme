@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppProvider } from './context/AppContext'
+import { AppProvider, useApp } from './context/AppContext'
+import LoginScreen from './components/LoginScreen'
 import HomeTab from './tabs/HomeTab'
 import ApplicationsTab from './tabs/ApplicationsTab'
 import PredictionsTab from './tabs/PredictionsTab'
@@ -14,6 +15,7 @@ import SwipeBack from './components/SwipeBack'
 type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests' | 'testsPanel' | 'adminPanel'
 
 function Shell() {
+  const { currentUser } = useApp()
   const [tab, setTab] = useState<Tab | 'home'>('home')
   const homeScrollY = useRef(0)
 
@@ -51,6 +53,9 @@ function Shell() {
         />
         <div className="dot-grid absolute inset-0" />
       </div>
+      {!currentUser ? (
+        <LoginScreen />
+      ) : (
       <main className="relative z-10 min-h-screen">
         {tab === 'home' && <HomeTab onNavigate={openTab} />}
         {tab === 'applications' && (
@@ -94,6 +99,7 @@ function Shell() {
           <AdminPanel onBack={() => openTab('tests')} />
         )}
       </main>
+      )}
     </div>
   )
 }

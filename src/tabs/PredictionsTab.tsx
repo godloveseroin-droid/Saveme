@@ -35,10 +35,9 @@ function getMillisecondsUntilTomorrow(): number {
 }
 
 export default function PredictionsTab({ onBack }: { onBack: () => void }) {
-  const { isAdmin, unlock, lock, workers } = useApp()
+  const { isAdmin, unlock, lock, workers, currentUser } = useApp()
+  const name = currentUser?.name ?? ''
   const saved = getSavedPrediction()
-  const [name, setName] = useState(saved?.name ?? '')
-  const [nameListOpen, setNameListOpen] = useState(false)
   const [prediction, setPrediction] = useState(saved?.text ?? '')
   const [adminOpen, setAdminOpen] = useState(false)
   const [adminPassword, setAdminPassword] = useState('')
@@ -49,7 +48,6 @@ export default function PredictionsTab({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       removeItem(predictionStorageKey)
-      setName('')
       setPrediction('')
     }, getMillisecondsUntilTomorrow())
 
@@ -121,65 +119,14 @@ export default function PredictionsTab({ onBack }: { onBack: () => void }) {
       </div>
 
       <div className="mt-10">
-        <label htmlFor="prediction-name" className="mb-2.5 block text-[10px] font-bold tracking-widest text-ink-muted">КТО ТЫ?</label>
-        <div className="relative">
-  <button
-    type="button"
-    disabled={locked}
-    onClick={() => setNameListOpen(!nameListOpen)}
-    className="h-12 w-full rounded-xl border border-accent/40 bg-input/70 px-4 text-left text-sm font-bold transition-all disabled:opacity-50"
-    style={{
-      boxShadow: nameListOpen ? '0 0 18px rgba(255,43,214,0.25)' : 'none'
-    }}
-  >
-    <div className="flex items-center justify-between">
-      <span className={name ? 'text-accent' : 'text-ink-muted'}>
-        {name || 'Выбери своё имя'}
-      </span>
-
-      <span
-        className="text-accent transition-transform"
-        style={{
-          transform: nameListOpen ? 'rotate(180deg)' : 'rotate(0deg)'
-        }}
-      >
-        ⌄
-      </span>
-    </div>
-  </button>
-
-  {nameListOpen && !locked && (
-    <div
-      className="absolute z-50 mt-1 w-full rounded-xl border border-accent/40 bg-[#09070d]/95 p-2 backdrop-blur-xl"
-      style={{
-        boxShadow: '0 0 25px rgba(255,43,214,0.22)'
-      }}
-    >
-      <div className="grid grid-cols-2 gap-1 max-h-52 overflow-y-auto">
-        {workers.map((worker) => (
-          <button
-            key={worker.name}
-            type="button"
-            onClick={() => {
-              setName(worker.name)
-              setNameListOpen(false)
-            }}
-            className="w-full rounded-lg px-2 py-2 text-left text-[14px] font-bold text-accent transition-all active:scale-95"
-            style={{
-              textShadow: '0 0 8px rgba(255,43,214,0.55)'
-            }}
-          >
-            {worker.name}
-          </button>
-        ))}
-      </div>
-    </div>
-  )}
-</div>
+        <div className="mb-3 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3">
+          <p className="text-[10px] font-bold tracking-widest text-ink-muted">ТЫ ВОШЁЛ КАК</p>
+          <p className="mt-0.5 truncate text-sm font-extrabold text-accent" style={{ textShadow: '0 0 8px rgba(255,43,214,0.55)' }}>{name}</p>
+        </div>
         <button
           onClick={reveal}
           disabled={locked || !name}
-          className={`mt-3.5 flex h-14 w-full items-center justify-center gap-2.5 rounded-xl text-sm font-extrabold transition-transform active:scale-95 ${locked || !name ? 'border border-line bg-card/70 backdrop-blur-md text-ink-faint' : 'bg-accent text-white'}`}
+          className={`mt-1 flex h-14 w-full items-center justify-center gap-2.5 rounded-xl text-sm font-extrabold transition-transform active:scale-95 ${locked || !name ? 'border border-line bg-card/70 backdrop-blur-md text-ink-faint' : 'bg-accent text-white'}`}
           style={!locked && name ? { boxShadow: '0 4px 16px rgba(255,43,214,0.35)' } : undefined}
         >
           <Sparkles size={18} color={locked || !name ? '#5a6172' : '#ffffff'} />
