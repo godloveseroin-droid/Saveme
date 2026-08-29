@@ -61,6 +61,12 @@ export type TestQuestionRow = {
   correct_answer: number | null
 }
 
+export type KnowledgeNumber = {
+  number: number
+  content: string
+  updated_at: string
+}
+
 export const api = {
   // Employees
   getEmployees: () => apiFetch<Employee[]>('/api/employees'),
@@ -163,4 +169,28 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ correct_answer }),
     }),
+
+  // Knowledge numbers (served by Supabase Edge Function)
+  getKnowledgeNumbers: async (): Promise<KnowledgeNumber[]> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/knowledge-numbers`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+    })
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    return res.json()
+  },
+  updateKnowledgeNumber: async (number: number, content: string, password: string): Promise<KnowledgeNumber> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/knowledge-numbers`
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ number, content, password }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || `API ${res.status}`)
+    return body as KnowledgeNumber
+  },
 }

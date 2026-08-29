@@ -5,10 +5,11 @@ type Props = {
   onOpenArticles: () => void
   onOpenTests: () => void
   onOpenAdmin: () => void
+  onOpenNumbers: () => void
   onBack: () => void
 }
 
-export default function TestsTab({ onOpenApplications, onOpenArticles, onOpenTests, onOpenAdmin, onBack }: Props) {
+export default function TestsTab({ onOpenApplications, onOpenArticles, onOpenTests, onOpenAdmin, onOpenNumbers, onBack }: Props) {
   return (
     <SwipeBack onBack={onBack} innerClassName="mx-auto max-w-md px-3 pb-10 pt-10">
       <button
@@ -53,6 +54,18 @@ export default function TestsTab({ onOpenApplications, onOpenArticles, onOpenTes
             alt="Тесты"
             className="block aspect-square w-full object-cover transition duration-300 group-hover:brightness-110"
           />
+        </button>
+
+        <button
+          onClick={onOpenNumbers}
+          className="group relative col-span-2 overflow-hidden rounded-2xl border border-neon/40 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.96]"
+          style={{ boxShadow: '0 0 16px rgba(0,229,255,0.15)' }}
+        >
+          <div className="flex aspect-[3/1] w-full items-center justify-center bg-card/70 backdrop-blur-md">
+            <span className="text-xl font-extrabold tracking-wide text-neon" style={{ textShadow: '0 0 10px rgba(0,229,255,0.4)' }}>
+              Числа
+            </span>
+          </div>
         </button>
       </div>
 

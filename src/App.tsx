@@ -10,9 +10,10 @@ import FludilkaTab from './tabs/FludilkaTab'
 import TestsTab from './tabs/TestsTab'
 import TestsPanelTab from './tabs/TestsPanelTab'
 import AdminPanel from './components/AdminPanel'
+import NumbersPanel from './components/NumbersPanel'
 import SwipeBack from './components/SwipeBack'
 
-type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests' | 'testsPanel' | 'adminPanel'
+type Tab = 'applications' | 'predictions' | 'articles' | 'secret' | 'fludilka' | 'tests' | 'testsPanel' | 'adminPanel' | 'numbers'
 
 function Shell() {
   const { currentUser } = useApp()
@@ -89,6 +90,7 @@ function Shell() {
             onOpenArticles={() => openTab('articles')}
             onOpenTests={() => openTab('testsPanel')}
             onOpenAdmin={() => openTab('adminPanel')}
+            onOpenNumbers={() => openTab('numbers')}
             onBack={goHome}
           />
         )}
@@ -97,6 +99,11 @@ function Shell() {
         )}
         {tab === 'adminPanel' && (
           <AdminPanel onBack={() => openTab('tests')} />
+        )}
+        {tab === 'numbers' && (
+          <SwipeBack onBack={() => openTab('tests')} innerClassName="mx-auto max-w-md px-4 pb-10 pt-6">
+            <NumbersPanel onBack={() => openTab('tests')} />
+          </SwipeBack>
         )}
       </main>
       )}
