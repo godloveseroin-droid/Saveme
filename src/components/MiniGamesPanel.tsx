@@ -3,6 +3,7 @@ import { Coins, Lock } from 'lucide-react'
 import { api, type MiniGameProfile, type MiniGameProgress } from '../lib/api'
 import { getLevelInfo, MINI_GAMES } from '../lib/miniGames'
 import { useApp } from '../context/AppContext'
+import DailyPollGame from './DailyPollGame'
 
 type Props = { onBack: () => void }
 
@@ -29,8 +30,14 @@ export default function MiniGamesPanel({ onBack }: Props) {
 
   useEffect(() => { void loadData() }, [loadData])
 
-  // -- Game placeholder screen --
+  // -- Game screen --
   if (selectedGame !== null) {
+    // Game #1: Вопрос дня — full implementation
+    if (selectedGame === 1) {
+      return <DailyPollGame onBack={() => setSelectedGame(null)} />
+    }
+
+    // Games 2-10: placeholder
     const game = MINI_GAMES.find((g) => g.number === selectedGame)
     return (
       <div className="mx-auto max-w-md px-5 pb-10 pt-6">

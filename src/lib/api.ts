@@ -89,6 +89,50 @@ export type MiniGameData = {
   progress: MiniGameProgress[]
 }
 
+export type DailyPollCandidate = {
+  candidate: string
+  votes: number
+  placement: number
+}
+
+export type DailyPollToday = {
+  pollId: number
+  question: string
+  candidates: string[]
+  userVote: string[] | null
+  votedAt: string | null
+}
+
+export type DailyPollYesterday = {
+  pollId: number
+  question: string
+  results: DailyPollCandidate[]
+  userVote: string[] | null
+  reward: { participation_rewarded: boolean; result_rewarded: boolean; xp_awarded: number; title_xp_awarded: number } | null
+}
+
+export type DailyPollState = {
+  today: DailyPollToday
+  yesterday: DailyPollYesterday | null
+}
+
+export type DailyPollResultBreakdown = {
+  candidate: string
+  placement: number
+  xp: number
+  titleXp: number
+}
+
+export type DailyPollClaimResult = {
+  success: boolean
+  message?: string
+  totalXp: number
+  totalTitleXp: number
+  breakdown?: DailyPollResultBreakdown[]
+  results?: DailyPollCandidate[]
+  alreadyClaimed?: boolean
+}
+
 export const api = {
   // Employees
   getEmployees: () => apiFetch<Employee[]>('/api/employees'),
@@ -255,5 +299,44 @@ export const api = {
     const body = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(body.error || `API ${res.status}`)
     return body as MiniGameProgress
+  },
+
+  // Daily poll (mini-game #1)
+  getDailyPollState: async (userId: string): Promise<DailyPollState> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/daily-poll?userId=${encodeURIComponent(userId)}`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || `API ${res.status}`)
+    return body as DailyPollState
+  },
+  voteDailyPoll: async (userId: string, selectedCandidates: string[]): Promise<{ success: boolean; message: string }> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/daily-poll`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ userId, action: 'vote', selectedCandidates }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || `API ${res.status}`)
+    return body as { success: boolean; message: string }
+  },
+  claimDailyPollResults: async (userId: string): Promise<DailyPollClaimResult> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/daily-poll`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ userId, action: 'claimResults' }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || `API ${res.status}`)
+    return body as DailyPollClaimResult
   },
 }

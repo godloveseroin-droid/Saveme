@@ -67,7 +67,7 @@ export type GameInfo = {
 }
 
 export const MINI_GAMES: GameInfo[] = [
-  { number: 1, title: 'Мини-игра 1', icon: '🔮', description: 'Угадай тайный символ' },
+  { number: 1, title: 'Вопрос дня', icon: '🔮', description: 'Ежедневный опрос с наградами' },
   { number: 2, title: 'Мини-игра 2', icon: '⚡', description: 'Быстрые ответы на время' },
   { number: 3, title: 'Мини-игра 3', icon: '🌙', description: 'Ночные загадки' },
   { number: 4, title: 'Мини-игра 4', icon: '🔥', description: 'Испытание огнём' },

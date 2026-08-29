@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.mini-games]
 verify_jwt = false
+
+[functions.daily-poll]
+verify_jwt = false
