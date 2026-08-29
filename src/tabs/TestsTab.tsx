@@ -46,7 +46,7 @@ export default function TestsTab({ onOpenApplications, onOpenArticles, onOpenTes
 
         <button
           onClick={onOpenTests}
-          className="group relative col-span-2 mx-auto w-[calc(50%-4px)] overflow-hidden rounded-2xl border border-neon/40 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.96]"
+          className="group relative overflow-hidden rounded-2xl border border-neon/40 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.96]"
           style={{ boxShadow: '0 0 16px rgba(0,229,255,0.15)' }}
         >
           <img
@@ -58,14 +58,14 @@ export default function TestsTab({ onOpenApplications, onOpenArticles, onOpenTes
 
         <button
           onClick={onOpenNumbers}
-          className="group relative col-span-2 overflow-hidden rounded-2xl border border-neon/40 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.96]"
+          className="group relative overflow-hidden rounded-2xl border border-neon/40 transition-transform duration-200 hover:scale-[1.03] active:scale-[0.96]"
           style={{ boxShadow: '0 0 16px rgba(0,229,255,0.15)' }}
         >
-          <div className="flex aspect-[3/1] w-full items-center justify-center bg-card/70 backdrop-blur-md">
-            <span className="text-xl font-extrabold tracking-wide text-neon" style={{ textShadow: '0 0 10px rgba(0,229,255,0.4)' }}>
-              Числа
-            </span>
-          </div>
+          <img
+            src="/banner-numbers.webp"
+            alt="Числа"
+            className="block aspect-square w-full object-cover transition duration-300 group-hover:brightness-110"
+          />
         </button>
       </div>
 
