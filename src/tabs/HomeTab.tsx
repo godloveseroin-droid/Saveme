@@ -90,9 +90,6 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
 
   const openNewPanel = () => {
     setHomeDimmed(true)
-    setShowPasswordModal(false)
-    setPasswordInput('')
-    setPasswordError('')
     setTimeout(() => {
       setShowNewPanel(true)
       requestAnimationFrame(() => {
@@ -103,7 +100,7 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
     }, 250)
   }
 
-  const handleBannerClick = () => {
+  const handleGameRoomClick = () => {
     setPasswordInput('')
     setPasswordError('')
     setShowPasswordModal(true)
@@ -111,7 +108,10 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
 
   const handlePasswordSubmit = () => {
     if (passwordInput === '3010') {
-      openNewPanel()
+      setShowPasswordModal(false)
+      setPasswordInput('')
+      setPasswordError('')
+      onNavigate('newSection')
     } else {
       setPasswordError('Неверный пароль')
     }
@@ -228,17 +228,24 @@ export default function HomeTab({ onNavigate }: { onNavigate: (tab: Tab) => void
 
       <div className="space-y-4">
         <BannerButton src="/banner-tests.webp" alt="Тесты" onClick={() => onNavigate('tests')} />
-        <BannerButton src="/banner-new-section.webp" alt="Новый раздел" onClick={() => onNavigate('newSection')} />
-        <BannerButton src="/banner-team-life.webp" alt="Панель жизни команды" onClick={() => setShowTeamLife(true)} />
         <div className="relative">
-          <BannerButton src="/banner-new-panel.webp" alt="Игровая комната" onClick={handleBannerClick} />
-          <span
-            className="pointer-events-none absolute right-3 top-3 rounded-full border border-amber-400/50 bg-amber-400/20 px-2.5 py-1 text-[10px] font-black tracking-wider text-amber-200 backdrop-blur-sm"
-            style={{ textShadow: '0 0 8px rgba(255,191,0,0.5)' }}
-          >
-            В РАЗРАБОТКЕ
-          </span>
+          <BannerButton src="/banner-new-section.webp" alt="Игровая комната" onClick={handleGameRoomClick} />
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-2xl">
+            <span
+              className="rounded-lg border border-neon/50 bg-black/50 px-4 py-2 text-sm font-black tracking-widest text-neon backdrop-blur-sm"
+              style={{ textShadow: '0 0 12px rgba(0,229,255,0.6)', boxShadow: '0 0 20px rgba(0,229,255,0.2)' }}
+            >
+              В РАЗРАБОТКЕ
+            </span>
+            <span
+              className="mt-1.5 rounded-lg bg-neon/15 px-3 py-1 text-xs font-bold text-neon/80 backdrop-blur-sm"
+            >
+              Игровая комната
+            </span>
+          </div>
         </div>
+        <BannerButton src="/banner-team-life.webp" alt="Панель жизни команды" onClick={() => setShowTeamLife(true)} />
+        <BannerButton src="/banner-new-panel.webp" alt="Обитель теней" onClick={openNewPanel} />
         {banners.map((banner) => (
           <BannerButton key={banner.id} src={banner.src} alt={banner.alt} onClick={() => onNavigate(banner.id)} />
         ))}

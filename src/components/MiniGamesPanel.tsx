@@ -113,7 +113,7 @@ export default function MiniGamesPanel({ onBack }: Props) {
             <div className="mb-1 flex items-center justify-between text-[10px] font-bold">
               <span className="text-neon/80">XP</span>
               <span className="text-ink-muted">
-                {levelInfo.level >= 10 ? 'MAX' : `${levelInfo.currentXp} / ${levelInfo.neededXp}`}
+                {levelInfo.level >= 49 ? 'MAX' : `${levelInfo.currentXp} / ${levelInfo.neededXp}`}
               </span>
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-black/40">
