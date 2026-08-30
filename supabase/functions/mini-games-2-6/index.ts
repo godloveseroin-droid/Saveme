@@ -123,6 +123,10 @@ const GAME_KEYS: Record<number, string> = {
   4: "past_life",
   5: "best_duo",
   6: "rate_player",
+  7: "mafia",
+  8: "yes_no",
+  9: "secret_love",
+  10: "roulette",
 };
 
 const GAME_NUMBER_FROM_KEY: Record<string, number> = Object.fromEntries(
@@ -136,6 +140,7 @@ const QUESTIONS: Record<string, string[]> = {
   past_life: ["Кто в прошлой жизни был рваным сапогом?"],
   best_duo: ["Кто из них лучше отработает смену вместе?"],
   rate_player: ["Оцени дружелюбие этого человека"],
+  yes_no: ["Смог бы ты выгулять его собаку просто так?"],
 };
 
 // ─── Base reward: +2 ordinary XP, +1 coin ───
@@ -158,7 +163,10 @@ const ALL_GAME_KEYS = [
   "past_life", // game #4
   "best_duo", // game #5
   "rate_player", // game #6
-  "game_7", "game_8", "game_9", "game_10", // future games
+  "mafia", // game #7
+  "yes_no", // game #8
+  "secret_love", // game #9
+  "roulette", // game #10
 ];
 
 // ─── Helpers ───
@@ -468,6 +476,14 @@ Deno.serve(async (req: Request) => {
         return await handleBestDuoGet(supabase, userId, todayStr, yesterdayStr);
       } else if (gameKey === "rate_player") {
         return await handleRatePlayerGet(supabase, userId, todayStr, yesterdayStr);
+      } else if (gameKey === "mafia") {
+        return await handleMafiaGet(supabase, userId, todayStr, yesterdayStr);
+      } else if (gameKey === "yes_no") {
+        return await handleYesNoGet(supabase, userId, todayStr, yesterdayStr);
+      } else if (gameKey === "secret_love") {
+        return await handleSecretLoveGet(supabase, userId, todayStr);
+      } else if (gameKey === "roulette") {
+        return await handleRouletteGet(supabase, userId, todayStr, yesterdayStr);
       }
 
       return json({ error: "Unknown gameKey" }, 400);
@@ -501,6 +517,14 @@ Deno.serve(async (req: Request) => {
           return await handleBestDuoVote(supabase, userId, todayStr, params);
         } else if (gameKey === "rate_player") {
           return await handleRatePlayerVote(supabase, userId, todayStr, params);
+        } else if (gameKey === "mafia") {
+          return await handleMafiaVote(supabase, userId, todayStr, params);
+        } else if (gameKey === "yes_no") {
+          return await handleYesNoVote(supabase, userId, todayStr, params);
+        } else if (gameKey === "secret_love") {
+          return await handleSecretLoveVote(supabase, userId, todayStr, params);
+        } else if (gameKey === "roulette") {
+          return await handleRouletteVote(supabase, userId, todayStr, params);
         }
       } else if (action === "claimResults") {
         if (gameKey === "who_of_them") {
@@ -511,8 +535,10 @@ Deno.serve(async (req: Request) => {
           return await handleBestDuoClaim(supabase, userId, yesterdayStr);
         } else if (gameKey === "rate_player") {
           return await handleRatePlayerClaim(supabase, userId, yesterdayStr);
+        } else if (gameKey === "yes_no") {
+          return await handleYesNoClaim(supabase, userId, yesterdayStr);
         }
-        // past_life has no claim — rewards are immediate
+        // past_life, mafia, secret_love, roulette have no claim — rewards are immediate
       }
 
       return json({ error: "Unknown action or gameKey" }, 400);
@@ -1455,5 +1481,742 @@ async function handleRatePlayerClaim(supabase: SupabaseClient, userId: string, y
     player_name: yDaily.player_name,
     avgRating: Math.round(avgRating * 10) / 10,
     totalVotes: ratings.length,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GAME #7: MAFIA — guess the mafia among 5 players, max 2 attempts
+// ═══════════════════════════════════════════════════════════════
+
+async function handleMafiaGet(supabase: SupabaseClient, userId: string, todayStr: string, yesterdayStr: string): Promise<Response> {
+  const workers = await getWorkers(supabase);
+  if (workers.length < 5) return json({ error: "Недостаточно игроков (нужно минимум 5)" }, 400);
+
+  // Get or create today's mafia_daily (shared for all users)
+  let { data: daily } = await supabase
+    .from("mafia_daily")
+    .select("*")
+    .eq("game_day", todayStr)
+    .maybeSingle();
+
+  if (!daily) {
+    const players = pickNPlayers(`${todayStr}:mafia:players`, workers, 5);
+    const mafiaIdx = pickIndex(`${todayStr}:mafia:correct`, 5);
+    const { data: newRow, error } = await supabase
+      .from("mafia_daily")
+      .insert({
+        game_day: todayStr,
+        question_index: 0,
+        player_1: players[0], player_2: players[1], player_3: players[2],
+        player_4: players[3], player_5: players[4],
+        mafia_index: mafiaIdx,
+      })
+      .select("*")
+      .single();
+    if (error) {
+      const { data: retry } = await supabase.from("mafia_daily").select("*").eq("game_day", todayStr).maybeSingle();
+      daily = retry;
+    } else {
+      daily = newRow;
+    }
+  }
+
+  // Get or create user state
+  let { data: userState } = await supabase
+    .from("mafia_user_state")
+    .select("*")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!userState) {
+    const { data: newState } = await supabase
+      .from("mafia_user_state")
+      .insert({ game_day: todayStr, user_id: userId })
+      .select("*")
+      .single();
+    userState = newState;
+  }
+
+  // Yesterday's stats
+  let yesterdayData = null;
+  const { data: yDaily } = await supabase
+    .from("mafia_daily")
+    .select("*")
+    .eq("game_day", yesterdayStr)
+    .maybeSingle();
+
+  if (yDaily) {
+    const yPlayers = [yDaily.player_1, yDaily.player_2, yDaily.player_3, yDaily.player_4, yDaily.player_5];
+    const mafiaName = yPlayers[yDaily.mafia_index];
+
+    const { data: yStates } = await supabase
+      .from("mafia_user_state")
+      .select("found_mafia, attempt_count, game_ended")
+      .eq("game_day", yesterdayStr)
+      .eq("game_ended", true);
+
+    const states = yStates || [];
+    const totalPlayed = states.length;
+    const guessed = states.filter((s: { found_mafia: boolean }) => s.found_mafia).length;
+    const notGuessed = totalPlayed - guessed;
+    const firstTry = states.filter((s: { found_mafia: boolean; attempt_count: number }) => s.found_mafia && s.attempt_count === 1).length;
+    const secondTry = states.filter((s: { found_mafia: boolean; attempt_count: number }) => s.found_mafia && s.attempt_count === 2).length;
+
+    yesterdayData = {
+      mafia: mafiaName,
+      guessed,
+      notGuessed,
+      firstTry,
+      secondTry,
+      totalPlayed,
+    };
+  }
+
+  const players = [daily.player_1, daily.player_2, daily.player_3, daily.player_4, daily.player_5];
+  const eliminated: number[] = [];
+  if (userState.eliminated_1 !== null && userState.eliminated_1 !== undefined) eliminated.push(userState.eliminated_1);
+  if (userState.eliminated_2 !== null && userState.eliminated_2 !== undefined) eliminated.push(userState.eliminated_2);
+
+  return json({
+    today: {
+      players,
+      attemptCount: userState.attempt_count,
+      eliminated,
+      foundMafia: userState.found_mafia,
+      gameEnded: userState.game_ended,
+      // Only reveal mafia index when game is ended
+      mafiaIndex: userState.game_ended ? daily.mafia_index : null,
+    },
+    yesterday: yesterdayData,
+  });
+}
+
+async function handleMafiaVote(supabase: SupabaseClient, userId: string, todayStr: string, params: any): Promise<Response> {
+  const { selectedIndex } = params;
+  if (typeof selectedIndex !== "number" || selectedIndex < 0 || selectedIndex > 4) {
+    return json({ error: "selectedIndex must be 0-4" }, 400);
+  }
+
+  // Get daily entry
+  const { data: daily } = await supabase
+    .from("mafia_daily")
+    .select("*")
+    .eq("game_day", todayStr)
+    .maybeSingle();
+  if (!daily) return json({ error: "Игра не найдена" }, 400);
+
+  // Get or create user state
+  let { data: userState } = await supabase
+    .from("mafia_user_state")
+    .select("*")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!userState) {
+    const { data: newState } = await supabase
+      .from("mafia_user_state")
+      .insert({ game_day: todayStr, user_id: userId })
+      .select("*")
+      .single();
+    userState = newState;
+  }
+
+  // Already ended?
+  if (userState.game_ended) {
+    return json({ error: "Игра уже завершена", gameEnded: true, mafiaIndex: daily.mafia_index }, 409);
+  }
+
+  // Already used 2 attempts?
+  if (userState.attempt_count >= 2) {
+    return json({ error: "Попытки закончились" }, 400);
+  }
+
+  // Can't pick already eliminated
+  const eliminated: number[] = [];
+  if (userState.eliminated_1 !== null && userState.eliminated_1 !== undefined) eliminated.push(userState.eliminated_1);
+  if (userState.eliminated_2 !== null && userState.eliminated_2 !== undefined) eliminated.push(userState.eliminated_2);
+  if (eliminated.includes(selectedIndex)) {
+    return json({ error: "Этот игрок уже выбран" }, 400);
+  }
+
+  const isMafia = selectedIndex === daily.mafia_index;
+  const attemptNum = userState.attempt_count + 1;
+
+  // Record attempt
+  await supabase.from("mafia_attempts").insert({
+    game_day: todayStr, user_id: userId, attempt_number: attemptNum,
+    selected_index: selectedIndex, is_mafia: isMafia,
+  });
+
+  if (isMafia) {
+    // Won!
+    const tier = attemptNum === 1 ? "gold" : "silver";
+    // Gold ×3 for first try = +9 title_xp, +9 coins; Silver ×2 for second = +6, +6
+    const multiplier = attemptNum === 1 ? 3 : 2;
+    const titleXpAmount = RESULT_REWARDS.gold.titleXp * multiplier;
+    const coinsAmount = RESULT_REWARDS.gold.coins * multiplier;
+
+    // Update user state
+    await supabase
+      .from("mafia_user_state")
+      .update({
+        attempt_count: attemptNum,
+        found_mafia: true,
+        game_ended: true,
+        eliminated_2: userState.eliminated_1 === null || userState.eliminated_1 === undefined ? selectedIndex : userState.eliminated_1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userState.id);
+
+    // Grant base reward
+    const reward = await getOrCreateRewardRow(supabase, "mafia_rewards", todayStr, userId);
+    if (!reward.participation_rewarded) {
+      await supabase.from("mafia_rewards").update({
+        participation_rewarded: true,
+        xp_awarded: (reward.xp_awarded || 0) + BASE_XP,
+        coins_awarded: (reward.coins_awarded || 0) + BASE_COINS,
+      }).eq("id", reward.id);
+      await addOrdinaryXp(supabase, userId, BASE_XP, "mafia_play", "mafia", todayStr);
+      await addCoins(supabase, userId, BASE_COINS, "mafia_play", "mafia", todayStr);
+    }
+
+    // Grant result reward
+    await supabase.from("mafia_rewards").update({
+      result_rewarded: true,
+      title_xp_awarded: (reward.title_xp_awarded || 0) + titleXpAmount,
+      coins_awarded: (reward.coins_awarded || 0) + coinsAmount,
+    }).eq("id", reward.id);
+    const reason = attemptNum === 1 ? "mafia_first_try_win" : "mafia_second_try_win";
+    await addTitleXp(supabase, userId, titleXpAmount, reason, "mafia", todayStr);
+    await addCoins(supabase, userId, coinsAmount, reason, "mafia", todayStr);
+
+    // Record completion + check bonus
+    await recordCompletion(supabase, userId, "mafia", todayStr);
+    await checkAndGrantAllGamesBonus(supabase, userId, todayStr);
+
+    const profile = await getOrCreateProfile(supabase, userId);
+    return json({
+      success: true,
+      isMafia: true,
+      attemptNumber: attemptNum,
+      gameEnded: true,
+      mafiaIndex: daily.mafia_index,
+      titleXpAwarded: titleXpAmount,
+      coinsAwarded: coinsAmount,
+      profile: buildProfileResponse(profile),
+    });
+  }
+
+  // Wrong guess
+  if (attemptNum === 1) {
+    // First wrong — allow second attempt
+    await supabase
+      .from("mafia_user_state")
+      .update({
+        attempt_count: 1,
+        eliminated_1: selectedIndex,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userState.id);
+
+    return json({
+      success: true,
+      isMafia: false,
+      attemptNumber: 1,
+      gameEnded: false,
+      remainingAttempts: 1,
+    });
+  } else {
+    // Second wrong — game over, grant base reward only
+    await supabase
+      .from("mafia_user_state")
+      .update({
+        attempt_count: 2,
+        eliminated_2: selectedIndex,
+        found_mafia: false,
+        game_ended: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userState.id);
+
+    // Grant base reward
+    const reward = await getOrCreateRewardRow(supabase, "mafia_rewards", todayStr, userId);
+    if (!reward.participation_rewarded) {
+      await supabase.from("mafia_rewards").update({
+        participation_rewarded: true,
+        xp_awarded: (reward.xp_awarded || 0) + BASE_XP,
+        coins_awarded: (reward.coins_awarded || 0) + BASE_COINS,
+      }).eq("id", reward.id);
+      await addOrdinaryXp(supabase, userId, BASE_XP, "mafia_play", "mafia", todayStr);
+      await addCoins(supabase, userId, BASE_COINS, "mafia_play", "mafia", todayStr);
+    }
+
+    // Record completion + check bonus
+    await recordCompletion(supabase, userId, "mafia", todayStr);
+    await checkAndGrantAllGamesBonus(supabase, userId, todayStr);
+
+    const profile = await getOrCreateProfile(supabase, userId);
+    return json({
+      success: true,
+      isMafia: false,
+      attemptNumber: 2,
+      gameEnded: true,
+      mafiaIndex: daily.mafia_index,
+      profile: buildProfileResponse(profile),
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GAME #8: YES/NO — vote yes or no, result next day
+// ═══════════════════════════════════════════════════════════════
+
+async function handleYesNoGet(supabase: SupabaseClient, userId: string, todayStr: string, yesterdayStr: string): Promise<Response> {
+  const workers = await getWorkers(supabase);
+  if (workers.length < 1) return json({ error: "Недостаточно игроков" }, 400);
+
+  const questions = QUESTIONS.yes_no;
+
+  let { data: daily } = await supabase
+    .from("yes_no_daily")
+    .select("*")
+    .eq("game_day", todayStr)
+    .maybeSingle();
+
+  if (!daily) {
+    const qIdx = pickIndex(`${todayStr}:yn:q`, questions.length);
+    const pIdx = pickIndex(`${todayStr}:yn:player`, workers.length);
+    const { data: newRow, error } = await supabase
+      .from("yes_no_daily")
+      .insert({ game_day: todayStr, question_index: qIdx, player_name: workers[pIdx] })
+      .select("*")
+      .single();
+    if (error) {
+      const { data: retry } = await supabase.from("yes_no_daily").select("*").eq("game_day", todayStr).maybeSingle();
+      daily = retry;
+    } else {
+      daily = newRow;
+    }
+  }
+
+  const { data: vote } = await supabase
+    .from("yes_no_votes")
+    .select("vote")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  // Yesterday's results
+  let yesterdayData = null;
+  const { data: yDaily } = await supabase
+    .from("yes_no_daily")
+    .select("*")
+    .eq("game_day", yesterdayStr)
+    .maybeSingle();
+
+  if (yDaily) {
+    const { data: yVotes } = await supabase
+      .from("yes_no_votes")
+      .select("vote")
+      .eq("game_day", yesterdayStr);
+
+    const yesVotes = (yVotes || []).filter((v: { vote: string }) => v.vote === "yes").length;
+    const noVotes = (yVotes || []).filter((v: { vote: string }) => v.vote === "no").length;
+
+    const { data: yUserVote } = await supabase
+      .from("yes_no_votes")
+      .select("vote")
+      .eq("game_day", yesterdayStr)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const { data: yReward } = await supabase
+      .from("yes_no_rewards")
+      .select("participation_rewarded, result_rewarded, xp_awarded, title_xp_awarded, coins_awarded")
+      .eq("game_day", yesterdayStr)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    let winner: string | null = null;
+    if (yesVotes > noVotes) winner = "yes";
+    else if (noVotes > yesVotes) winner = "no";
+
+    yesterdayData = {
+      question: questions[yDaily.question_index] || questions[0],
+      player_name: yDaily.player_name,
+      yesVotes,
+      noVotes,
+      winner,
+      userVote: yUserVote?.vote || null,
+      reward: yReward || null,
+    };
+  }
+
+  return json({
+    today: {
+      question: questions[daily.question_index] || questions[0],
+      player_name: daily.player_name,
+      userVote: vote?.vote || null,
+    },
+    yesterday: yesterdayData,
+  });
+}
+
+async function handleYesNoVote(supabase: SupabaseClient, userId: string, todayStr: string, params: any): Promise<Response> {
+  const { vote } = params;
+  if (vote !== "yes" && vote !== "no") return json({ error: "vote must be 'yes' or 'no'" }, 400);
+
+  const { data: existing } = await supabase
+    .from("yes_no_votes")
+    .select("id")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) return json({ error: "Вы уже ответили" }, 409);
+
+  const { error: voteErr } = await supabase
+    .from("yes_no_votes")
+    .insert({ game_day: todayStr, user_id: userId, vote });
+
+  if (voteErr) {
+    if (voteErr.code === "23505") return json({ error: "Вы уже ответили" }, 409);
+    return json({ error: voteErr.message }, 500);
+  }
+
+  const result = await grantBaseReward(supabase, userId, "yes_no", 8, todayStr, "yes_no_rewards");
+
+  return json({
+    success: true,
+    message: "Ответ учтён! Результаты будут доступны завтра в 08:00",
+    profile: buildProfileResponse(result.profile),
+  });
+}
+
+async function handleYesNoClaim(supabase: SupabaseClient, userId: string, yesterdayStr: string): Promise<Response> {
+  const { data: yDaily } = await supabase
+    .from("yes_no_daily")
+    .select("*")
+    .eq("game_day", yesterdayStr)
+    .maybeSingle();
+
+  if (!yDaily) return json({ error: "Вчерашняя игра не найдена" }, 400);
+
+  const { data: yUserVote } = await supabase
+    .from("yes_no_votes")
+    .select("vote")
+    .eq("game_day", yesterdayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!yUserVote) {
+    return json({ success: true, message: "Вы не участвовали вчера", totalTitleXp: 0, totalCoins: 0 });
+  }
+
+  const { data: yReward } = await supabase
+    .from("yes_no_rewards")
+    .select("id, result_rewarded")
+    .eq("game_day", yesterdayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (yReward?.result_rewarded) {
+    return json({ success: true, message: "Награда уже получена", alreadyClaimed: true, totalTitleXp: 0, totalCoins: 0 });
+  }
+
+  const { data: yVotes } = await supabase
+    .from("yes_no_votes")
+    .select("vote")
+    .eq("game_day", yesterdayStr);
+
+  const yesVotes = (yVotes || []).filter((v: { vote: string }) => v.vote === "yes").length;
+  const noVotes = (yVotes || []).filter((v: { vote: string }) => v.vote === "no").length;
+
+  let winner: string | null = null;
+  if (yesVotes > noVotes) winner = "yes";
+  else if (noVotes > yesVotes) winner = "no";
+
+  if (!winner) {
+    if (yReward) {
+      await supabase.from("yes_no_rewards").update({ result_rewarded: true }).eq("id", yReward.id);
+    } else {
+      await supabase.from("yes_no_rewards").insert({ game_day: yesterdayStr, user_id: userId, participation_rewarded: true, result_rewarded: true });
+    }
+    return json({ success: true, message: "Ничья — награда не выдаётся", totalTitleXp: 0, totalCoins: 0, winner: null });
+  }
+
+  if (yUserVote.vote !== winner) {
+    if (yReward) {
+      await supabase.from("yes_no_rewards").update({ result_rewarded: true }).eq("id", yReward.id);
+    } else {
+      await supabase.from("yes_no_rewards").insert({ game_day: yesterdayStr, user_id: userId, participation_rewarded: true, result_rewarded: true });
+    }
+    return json({ success: true, message: "Ваш выбор не победил", totalTitleXp: 0, totalCoins: 0, winner });
+  }
+
+  // User won — silver reward
+  const claimResult = await grantResultReward(supabase, userId, "yes_no", yesterdayStr, "yes_no_rewards", "silver");
+  const profile = await getOrCreateProfile(supabase, userId);
+
+  return json({
+    success: true,
+    message: "Ваш выбор победил!",
+    totalTitleXp: claimResult.titleXp,
+    totalCoins: claimResult.coins,
+    winner,
+    profile: buildProfileResponse(profile),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GAME #9: SECRET LOVE — individual 3 players, immediate result
+// ═══════════════════════════════════════════════════════════════
+
+async function handleSecretLoveGet(supabase: SupabaseClient, userId: string, todayStr: string): Promise<Response> {
+  const workers = await getWorkers(supabase);
+  if (workers.length < 3) return json({ error: "Недостаточно игроков (нужно минимум 3)" }, 400);
+
+  // Get or create per-user daily entry
+  let { data: userDaily } = await supabase
+    .from("secret_love_user_daily")
+    .select("*")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!userDaily) {
+    const players = pickNPlayers(`${todayStr}:sl:${userId}:players`, workers, 3);
+    const correctIdx = pickIndex(`${todayStr}:sl:${userId}:correct`, 3);
+    const { data: newRow, error } = await supabase
+      .from("secret_love_user_daily")
+      .insert({
+        game_day: todayStr, user_id: userId,
+        player_1: players[0], player_2: players[1], player_3: players[2],
+        correct_index: correctIdx,
+      })
+      .select("*")
+      .single();
+    if (error) {
+      const { data: retry } = await supabase
+        .from("secret_love_user_daily")
+        .select("*")
+        .eq("game_day", todayStr)
+        .eq("user_id", userId)
+        .maybeSingle();
+      userDaily = retry;
+    } else {
+      userDaily = newRow;
+    }
+  }
+
+  const { data: userState } = await supabase
+    .from("secret_love_user_state")
+    .select("selected_index, is_correct")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const players = [userDaily.player_1, userDaily.player_2, userDaily.player_3];
+
+  return json({
+    today: {
+      question: "Кто из них тайно в тебя влюблён?",
+      players,
+      userVote: userState ? { selected_index: userState.selected_index, is_correct: userState.is_correct } : null,
+      // Only reveal correct index after answering
+      correctIndex: userState ? userDaily.correct_index : null,
+    },
+    yesterday: null, // No shared stats for this game
+  });
+}
+
+async function handleSecretLoveVote(supabase: SupabaseClient, userId: string, todayStr: string, params: any): Promise<Response> {
+  const { selectedIndex } = params;
+  if (typeof selectedIndex !== "number" || selectedIndex < 0 || selectedIndex > 2) {
+    return json({ error: "selectedIndex must be 0, 1, or 2" }, 400);
+  }
+
+  // Check if already answered
+  const { data: existing } = await supabase
+    .from("secret_love_user_state")
+    .select("id")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) return json({ error: "Вы уже ответили" }, 409);
+
+  // Get user daily entry
+  const { data: userDaily } = await supabase
+    .from("secret_love_user_daily")
+    .select("correct_index")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!userDaily) return json({ error: "Игра не найдена" }, 400);
+
+  const isCorrect = selectedIndex === userDaily.correct_index;
+
+  const { error: stateErr } = await supabase
+    .from("secret_love_user_state")
+    .insert({ game_day: todayStr, user_id: userId, selected_index: selectedIndex, is_correct: isCorrect });
+
+  if (stateErr) {
+    if (stateErr.code === "23505") return json({ error: "Вы уже ответили" }, 409);
+    return json({ error: stateErr.message }, 500);
+  }
+
+  // Base reward
+  const result = await grantBaseReward(supabase, userId, "secret_love", 9, todayStr, "secret_love_rewards");
+
+  // If correct — silver reward
+  let silverResult = null;
+  if (isCorrect) {
+    silverResult = await grantResultReward(supabase, userId, "secret_love", todayStr, "secret_love_rewards", "silver");
+  }
+
+  const profile = await getOrCreateProfile(supabase, userId);
+
+  return json({
+    success: true,
+    isCorrect,
+    correctIndex: userDaily.correct_index,
+    message: isCorrect ? "Правильно!" : "Неправильно",
+    profile: buildProfileResponse(profile),
+    silverReward: silverResult ? { titleXp: silverResult.titleXp, coins: silverResult.coins } : null,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GAME #10: ROULETTE — 50/50, backend-determined, immediate result
+// ═══════════════════════════════════════════════════════════════
+
+async function handleRouletteGet(supabase: SupabaseClient, userId: string, todayStr: string, yesterdayStr: string): Promise<Response> {
+  const workers = await getWorkers(supabase);
+  if (workers.length < 2) return json({ error: "Недостаточно игроков" }, 400);
+
+  // Filter out the user themselves
+  const opponents = workers.filter((w) => w !== userId);
+  if (opponents.length < 1) return json({ error: "Недостаточно противников" }, 400);
+
+  // Get or create per-user daily entry
+  let { data: userDaily } = await supabase
+    .from("roulette_user_daily")
+    .select("*")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!userDaily) {
+    const oIdx = pickIndex(`${todayStr}:rl:${userId}:opponent`, opponents.length);
+    const { data: newRow, error } = await supabase
+      .from("roulette_user_daily")
+      .insert({ game_day: todayStr, user_id: userId, opponent_name: opponents[oIdx] })
+      .select("*")
+      .single();
+    if (error) {
+      const { data: retry } = await supabase
+        .from("roulette_user_daily")
+        .select("*")
+        .eq("game_day", todayStr)
+        .eq("user_id", userId)
+        .maybeSingle();
+      userDaily = retry;
+    } else {
+      userDaily = newRow;
+    }
+  }
+
+  // Check if already played
+  const { data: userState } = await supabase
+    .from("roulette_user_state")
+    .select("result")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  // Yesterday's stats
+  let yesterdayData = null;
+  const { data: yStates } = await supabase
+    .from("roulette_user_state")
+    .select("result")
+    .eq("game_day", yesterdayStr);
+
+  if (yStates && yStates.length > 0) {
+    const wins = yStates.filter((s: { result: string }) => s.result === "win").length;
+    const losses = yStates.filter((s: { result: string }) => s.result === "lose").length;
+    yesterdayData = {
+      wins,
+      losses,
+      total: yStates.length,
+    };
+  }
+
+  return json({
+    today: {
+      opponent_name: userDaily.opponent_name,
+      result: userState?.result || null,
+    },
+    yesterday: yesterdayData,
+  });
+}
+
+async function handleRouletteVote(supabase: SupabaseClient, userId: string, todayStr: string, _params: any): Promise<Response> {
+  // Check if already played
+  const { data: existing } = await supabase
+    .from("roulette_user_state")
+    .select("id, result")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) {
+    return json({ error: "Вы уже сыграли сегодня", result: existing.result }, 409);
+  }
+
+  // Get opponent
+  const { data: userDaily } = await supabase
+    .from("roulette_user_daily")
+    .select("opponent_name")
+    .eq("game_day", todayStr)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!userDaily) return json({ error: "Игра не найдена" }, 400);
+
+  // Backend determines result: 50/50
+  const randomVal = Math.random();
+  const result = randomVal < 0.5 ? "win" : "lose";
+
+  // Record result
+  const { error: stateErr } = await supabase
+    .from("roulette_user_state")
+    .insert({ game_day: todayStr, user_id: userId, result });
+
+  if (stateErr) {
+    if (stateErr.code === "23505") return json({ error: "Вы уже сыграли сегодня", result: "win" }, 409);
+    return json({ error: stateErr.message }, 500);
+  }
+
+  // Base reward (always)
+  const baseResult = await grantBaseReward(supabase, userId, "roulette", 10, todayStr, "roulette_rewards");
+
+  // If win — gold reward
+  let goldResult = null;
+  if (result === "win") {
+    goldResult = await grantResultReward(supabase, userId, "roulette", todayStr, "roulette_rewards", "gold");
+  }
+
+  const profile = await getOrCreateProfile(supabase, userId);
+
+  return json({
+    success: true,
+    result,
+    opponent_name: userDaily.opponent_name,
+    profile: buildProfileResponse(profile),
+    goldReward: goldResult ? { titleXp: goldResult.titleXp, coins: goldResult.coins } : null,
   });
 }

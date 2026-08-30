@@ -171,6 +171,3 @@ export default function RatePlayerGame({ onBack, onProfileUpdate }: Props) {
     </div>
   )
 }
-
-
-export default RatePlayerGame

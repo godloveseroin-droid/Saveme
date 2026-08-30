@@ -10,6 +10,10 @@ import WouldHeDoItGame from './games/WouldHeDoItGame'
 import PastLifeGame from './games/PastLifeGame'
 import BestDuoGame from './games/BestDuoGame'
 import RatePlayerGame from './games/RatePlayerGame'
+import MafiaGame from './games/MafiaGame'
+import YesNoGame from './games/YesNoGame'
+import SecretLoveGame from './games/SecretLoveGame'
+import RouletteGame from './games/RouletteGame'
 
 type Props = { onBack: () => void }
 
@@ -78,8 +82,20 @@ export default function MiniGamesPanel({ onBack }: Props) {
     if (selectedGame === 6) {
       return <RatePlayerGame onBack={() => setSelectedGame(null)} onProfileUpdate={refreshProfile} />
     }
+    if (selectedGame === 7) {
+      return <MafiaGame onBack={() => setSelectedGame(null)} onProfileUpdate={refreshProfile} />
+    }
+    if (selectedGame === 8) {
+      return <YesNoGame onBack={() => setSelectedGame(null)} onProfileUpdate={refreshProfile} />
+    }
+    if (selectedGame === 9) {
+      return <SecretLoveGame onBack={() => setSelectedGame(null)} onProfileUpdate={refreshProfile} />
+    }
+    if (selectedGame === 10) {
+      return <RouletteGame onBack={() => setSelectedGame(null)} onProfileUpdate={refreshProfile} />
+    }
 
-    // Games 7-10: placeholder
+    // No more placeholders — all 10 games are implemented
     const game = MINI_GAMES.find((g) => g.number === selectedGame)
     return (
       <div className="mx-auto max-w-md px-5 pb-10 pt-6">

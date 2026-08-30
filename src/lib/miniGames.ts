@@ -113,8 +113,8 @@ export const MINI_GAMES: GameInfo[] = [
   { number: 4, title: 'Прошлая жизнь', icon: '🔥', description: 'Кто кем был в прошлой жизни?' },
   { number: 5, title: 'Лучший дуэт', icon: '⭐', description: 'Какая команда лучше?' },
   { number: 6, title: 'Оцени', icon: '🎭', description: 'Оцени коллегу от 0 до 5' },
-  { number: 7, title: 'Мини-игра 7', icon: '💫', description: 'Поток сознания' },
-  { number: 8, title: 'Мини-игра 8', icon: '🗝️', description: 'Ключи от тайны' },
-  { number: 9, title: 'Мини-игра 9', icon: '🌌', description: 'Галактика вопросов' },
-  { number: 10, title: 'Мини-игра 10', icon: '👑', description: 'Финальное испытание' },
+  { number: 7, title: 'Угадай мафию', icon: '🎯', description: 'Найди мафию за 2 попытки' },
+  { number: 8, title: 'Да или Нет', icon: '💫', description: 'Смог бы ты выгулять собаку?' },
+  { number: 9, title: 'Тайная любовь', icon: '🗝️', description: 'Кто тайно в тебя влюблён?' },
+  { number: 10, title: 'Рулетка', icon: '👑', description: '50 на 50 против игрока' },
 ]
