@@ -105,14 +105,18 @@ export default function RatePlayerGame({ onBack, onProfileUpdate }: Props) {
         <div className="mb-5 rounded-2xl border border-amber-400/25 bg-card/50 p-4 backdrop-blur-md" style={{ boxShadow: '0 0 16px rgba(255,191,0,0.1)' }}>
           <div className="mb-3 flex items-center gap-2">
             <Trophy size={16} className="text-amber-300" />
-            <p className="text-[10px] font-bold tracking-widest text-amber-300">ВЧЕРАШНИЙ РЕЗУЛЬТАТ</p>
+            <p className="text-[10px] font-bold tracking-widest text-amber-300">ВЧЕРА ОЦЕНИВАЛИ</p>
           </div>
           <p className="mb-1 text-sm font-bold text-ink/90">{yesterday.question}</p>
           <p className="mb-3 text-xs text-ink-muted">Игрок: <span className="font-bold text-ink">{yesterday.player_name}</span></p>
           <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-center">
             <p className="text-[10px] font-bold tracking-widest text-amber-300">СРЕДНЯЯ ОЦЕНКА</p>
-            <p className="mt-1 text-2xl font-extrabold text-amber-200">{yesterday.avgRating.toFixed(1)} <span className="text-sm text-ink-muted">/ 5</span></p>
-            <p className="mt-1 text-xs text-ink-muted">Голосов: {yesterday.totalVotes}</p>
+            {yesterday.totalVotes > 0 ? (
+              <p className="mt-1 text-2xl font-extrabold text-amber-200">{yesterday.avgRating.toFixed(1)} <span className="text-sm text-ink-muted">/ 5</span></p>
+            ) : (
+              <p className="mt-1 text-sm text-ink-muted">Нет оценок</p>
+            )}
+            <p className="mt-1 text-xs text-ink-muted">Проголосовало: {yesterday.totalVotes}</p>
             {yesterday.userVote !== null && <p className="mt-1 text-xs text-ink-muted">Ваша оценка: {yesterday.userVote}</p>}
           </div>
         </div>
@@ -148,7 +152,12 @@ export default function RatePlayerGame({ onBack, onProfileUpdate }: Props) {
           {hasVoted ? (
             <div className="mt-4 rounded-xl border border-success/30 bg-success/10 p-3 text-center">
               <div className="flex items-center justify-center gap-2"><Check size={16} className="text-success" /><p className="text-sm font-extrabold text-success">Оценка принята!</p></div>
-              <p className="mt-1 text-sm font-extrabold text-neon" style={{ textShadow: '0 0 10px rgba(0,229,255,0.4)' }}>🥈 +2 XP звания +2🪙</p>
+              {today.userVote !== null && today.userVote !== undefined && (
+                <p className="mt-2 text-xs text-ink-muted">
+                  Твоя оценка: <span className="font-bold text-neon">{today.userVote} / 5</span>
+                </p>
+              )}
+              <p className="mt-1 text-sm font-extrabold text-neon" style={{ textShadow: '0 0 10px rgba(0,229,255,0.4)' }}>+2 XP · +2 XP звания · +3🪙</p>
               <p className="mt-1 text-[11px] text-ink-muted">Средняя оценка будет доступна завтра в 08:00</p>
             </div>
           ) : (
@@ -162,3 +171,6 @@ export default function RatePlayerGame({ onBack, onProfileUpdate }: Props) {
     </div>
   )
 }
+
+
+export default RatePlayerGame

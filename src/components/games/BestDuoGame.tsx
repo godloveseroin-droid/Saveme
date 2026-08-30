@@ -163,6 +163,11 @@ export default function BestDuoGame({ onBack, onProfileUpdate }: Props) {
             <TeamCard team="КОМАНДА 2" teamNum={2} players={yesterday.team2} votes={yesterday.team2Votes} isWinner={yesterday.winner === 2} isSelected={false} isChosen={yesterday.userVote === 2} onClick={() => {}} />
           </div>
           {!yesterday.winner && <p className="mt-2 text-center text-xs text-ink-muted">Ничья — награда не выдаётся</p>}
+          {yesterday.winner && (
+            <p className="mt-2 text-center text-xs font-bold text-amber-300">
+              🏆 Победили: {(yesterday.winner === 1 ? yesterday.team1 : yesterday.team2).join(' + ')}
+            </p>
+          )}
 
           {yesterday.userVote && !resultsClaimed && yesterday.winner && (
             <button onClick={handleClaim} disabled={claiming} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/15 py-2.5 text-sm font-extrabold text-amber-200 transition hover:bg-amber-400/25 active:scale-95 disabled:opacity-50">
@@ -196,6 +201,11 @@ export default function BestDuoGame({ onBack, onProfileUpdate }: Props) {
           {hasVoted ? (
             <div className="mt-4 rounded-xl border border-success/30 bg-success/10 p-3 text-center">
               <div className="flex items-center justify-center gap-2"><Check size={16} className="text-success" /><p className="text-sm font-extrabold text-success">Голос учтён!</p></div>
+              {today.userVote && (
+                <p className="mt-2 text-xs text-ink-muted">
+                  Твой выбор: <span className="font-bold text-ink">{(today.userVote === 1 ? today.team1 : today.team2).join(' + ')}</span>
+                </p>
+              )}
               <p className="mt-1 text-[11px] text-ink-muted">Результаты будут доступны завтра в 08:00</p>
             </div>
           ) : (
