@@ -1,8 +1,26 @@
-import { useEffect, useState, useCallback } from 'react'
-import { Lock, Save, ArrowLeft, Check } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { Lock, Save, ArrowLeft, Check, SquareX, Type } from 'lucide-react'
 import { api, type KnowledgeNumber } from '../lib/api'
+import {
+  type Mark, type BorderColor, type TextColor, type Line,
+  getLines, parseContent, buildContentString,
+  applyBorder, applyTextColor, removeBorderAt, removeTextColorAt,
+  BORDER_STYLES, TEXT_STYLES,
+} from '../lib/textFormat'
 
 type Props = { onBack: () => void }
+
+const BORDER_COLORS: { key: BorderColor; label: string; color: string }[] = [
+  { key: 'red', label: 'Красная', color: '#ff4444' },
+  { key: 'green', label: 'Зелёная', color: '#39ff14' },
+  { key: 'yellow', label: 'Жёлтая', color: '#facc15' },
+]
+
+const TEXT_COLORS: { key: TextColor; label: string; color: string }[] = [
+  { key: 'orange', label: 'Оранжевый', color: '#ff9933' },
+  { key: 'purple', label: 'Пурпурный', color: '#c084fc' },
+  { key: 'green', label: 'Зелёный', color: '#39ff14' },
+]
 
 export default function NumbersPanel({ onBack }: Props) {
   const [numbers, setNumbers] = useState<KnowledgeNumber[]>([])
@@ -14,8 +32,11 @@ export default function NumbersPanel({ onBack }: Props) {
   const [adminPassword, setAdminPassword] = useState('')
   const [adminError, setAdminError] = useState('')
   const [editText, setEditText] = useState('')
+  const [editMarks, setEditMarks] = useState<Mark[]>([])
   const [saving, setSaving] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const loadNumbers = useCallback(async () => {
     try {
@@ -34,7 +55,14 @@ export default function NumbersPanel({ onBack }: Props) {
 
   const openNumber = (n: number) => {
     const item = numbers.find((it) => it.number === n)
-    if (item) setEditText(item.content)
+    const parsed = parseContent(item?.content ?? '')
+    if (parsed) {
+      setEditText(parsed.text)
+      setEditMarks(parsed.marks)
+    } else {
+      setEditText(item?.content ?? '')
+      setEditMarks([])
+    }
     setSelected(n)
   }
 
@@ -49,12 +77,46 @@ export default function NumbersPanel({ onBack }: Props) {
     }
   }
 
+  const getSelectionRange = (): { start: number; end: number } | null => {
+    const ta = textareaRef.current
+    if (!ta) return null
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    if (start === end) return null
+    return { start, end }
+  }
+
+  const handleApplyBorder = (color: BorderColor) => {
+    const sel = getSelectionRange()
+    if (!sel) return
+    setEditMarks((prev) => applyBorder(prev, sel.start, sel.end, color))
+  }
+
+  const handleApplyTextColor = (color: TextColor) => {
+    const sel = getSelectionRange()
+    if (!sel) return
+    setEditMarks((prev) => applyTextColor(prev, sel.start, sel.end, color))
+  }
+
+  const handleRemoveBorder = () => {
+    const sel = getSelectionRange()
+    if (!sel) return
+    setEditMarks((prev) => removeBorderAt(prev, sel.start, sel.end))
+  }
+
+  const handleRemoveTextColor = () => {
+    const sel = getSelectionRange()
+    if (!sel) return
+    setEditMarks((prev) => removeTextColorAt(prev, sel.start, sel.end))
+  }
+
   const handleSave = async () => {
     if (selected === null) return
     setSaving(true)
     setSavedFlash(false)
     try {
-      const updated = await api.updateKnowledgeNumber(selected, editText, '3010')
+      const contentStr = buildContentString(editText, editMarks)
+      const updated = await api.updateKnowledgeNumber(selected, contentStr, '3010')
       setNumbers((prev) => prev.map((n) => (n.number === selected ? updated : n)))
       setSavedFlash(true)
       setTimeout(() => setSavedFlash(false), 2500)
@@ -84,12 +146,75 @@ export default function NumbersPanel({ onBack }: Props) {
         <div className="rounded-2xl border border-neon/25 bg-card/70 backdrop-blur-md p-5" style={{ boxShadow: '0 0 18px rgba(0,229,255,0.08)' }}>
           {isAdmin ? (
             <>
+              {/* Format toolbar */}
+              <div className="mb-3 rounded-xl border border-line/50 bg-black/40 p-2.5">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <span className="mr-1 shrink-0 text-[10px] font-bold uppercase tracking-wider text-ink-muted">Рамка:</span>
+                  {BORDER_COLORS.map((bc) => (
+                    <button
+                      key={bc.key}
+                      onClick={() => handleApplyBorder(bc.key)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border transition active:scale-90"
+                      style={{ borderColor: bc.color, boxShadow: `0 0 6px ${bc.color}40` }}
+                      title={`${bc.label} рамка`}
+                    >
+                      <span className="text-xs" style={{ color: bc.color }}>⬚</span>
+                    </button>
+                  ))}
+                  <button
+                    onClick={handleRemoveBorder}
+                    className="ml-1 flex h-7 items-center gap-1 rounded-lg border border-line/50 bg-black/30 px-2 text-[10px] font-bold text-ink-muted transition active:scale-90 hover:text-ink"
+                    title="Убрать рамку"
+                  >
+                    <SquareX size={13} />
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="mr-1 shrink-0 text-[10px] font-bold uppercase tracking-wider text-ink-muted">Текст:</span>
+                  {TEXT_COLORS.map((tc) => (
+                    <button
+                      key={tc.key}
+                      onClick={() => handleApplyTextColor(tc.key)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border transition active:scale-90"
+                      style={{ borderColor: tc.color, boxShadow: `0 0 6px ${tc.color}40` }}
+                      title={`${tc.label} текст`}
+                    >
+                      <span className="text-xs font-black" style={{ color: tc.color, textShadow: `0 0 6px ${tc.color}` }}>A</span>
+                    </button>
+                  ))}
+                  <button
+                    onClick={handleRemoveTextColor}
+                    className="ml-1 flex h-7 items-center gap-1 rounded-lg border border-line/50 bg-black/30 px-2 text-[10px] font-bold text-ink-muted transition active:scale-90 hover:text-ink"
+                    title="Обычный цвет"
+                  >
+                    <Type size={13} />
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[9px] text-ink-faint">Выделите фрагмент текста и нажмите нужную кнопку</p>
+              </div>
+
               <textarea
+                ref={textareaRef}
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
+                onSelect={(e) => {
+                  const ta = e.currentTarget
+                  if (ta.selectionStart !== ta.selectionEnd) {
+                    ta.focus()
+                  }
+                }}
                 placeholder="Введите текст для этого числа..."
-                className="min-h-[240px] w-full resize-y rounded-xl border border-line bg-input px-4 py-3 text-sm leading-relaxed text-ink outline-none focus:border-neon/50"
+                className="min-h-[200px] w-full resize-y rounded-xl border border-line bg-input px-4 py-3 text-sm leading-[1.3] text-ink outline-none focus:border-neon/50"
               />
+
+              {/* Preview */}
+              {editText.trim() && (
+                <div className="mt-3 rounded-xl border border-line/40 bg-black/30 p-3">
+                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-ink-faint">Предпросмотр:</p>
+                  <CompactText lines={getLines(buildContentString(editText, editMarks))} />
+                </div>
+              )}
+
               <div className="mt-3 flex items-center justify-between">
                 {savedFlash ? (
                   <span className="flex items-center gap-1.5 text-sm font-bold text-success">
@@ -110,13 +235,11 @@ export default function NumbersPanel({ onBack }: Props) {
               </div>
             </>
           ) : (
-            <div className="max-h-[55vh] overflow-y-auto whitespace-pre-wrap break-words text-[15px] leading-[1.8] text-ink/90">
+            <div className="max-h-[55vh] overflow-y-auto">
               {current?.content?.trim() ? (
-                current.content.split('\n').map((para, i) => (
-                  <p key={i} className="mb-3">{para}</p>
-                ))
+                <CompactText lines={getLines(current.content)} />
               ) : (
-                <p className="text-ink-muted">Текст для этого числа ещё не добавлен.</p>
+                <p className="text-sm text-ink-muted">Текст для этого числа ещё не добавлен.</p>
               )}
             </div>
           )}
@@ -210,6 +333,53 @@ export default function NumbersPanel({ onBack }: Props) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function CompactText({ lines }: { lines: Line[] }) {
+  return (
+    <div className="text-[15px] leading-[1.3] text-ink/90">
+      {lines.map((segs, lineIdx) => (
+        <p key={lineIdx} className="mb-1 last:mb-0">
+          {segs.length === 0 ? (
+            '\u00A0'
+          ) : (
+            segs.map((seg, segIdx) => {
+              let style: React.CSSProperties = {}
+              let className = ''
+              if (seg.c) {
+                const ts = TEXT_STYLES[seg.c]
+                style = { color: ts.color, textShadow: `0 0 6px ${ts.glow}` }
+              }
+              if (seg.b) {
+                const bs = BORDER_STYLES[seg.b]
+                return (
+                  <span
+                    key={segIdx}
+                    className={`inline-block rounded-md ${className}`}
+                    style={{
+                      ...style,
+                      border: `1px solid ${bs.border}`,
+                      boxShadow: `0 0 8px ${bs.glow}, inset 0 0 4px ${bs.glow}`,
+                      background: bs.bg,
+                      padding: '0.05em 0.35em',
+                      margin: '0 0.05em',
+                    }}
+                  >
+                    {seg.text}
+                  </span>
+                )
+              }
+              return (
+                <span key={segIdx} className={className} style={style}>
+                  {seg.text}
+                </span>
+              )
+            })
+          )}
+        </p>
+      ))}
     </div>
   )
 }
