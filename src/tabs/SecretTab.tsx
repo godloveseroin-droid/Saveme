@@ -3,9 +3,13 @@ import { DoorOpen, Flame, Plus, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import BackButton from '../components/BackButton'
 import SecretQuest from '../components/SecretQuest'
+import TeamLifePanel from '../components/TeamLifePanel'
+import GamePanel from '../components/GamePanel'
+import SwipeBack from '../components/SwipeBack'
 import { getItem, removeItem } from '../lib/storage'
 
 type SecretTabProps = { onBack: () => void }
+type InnerView = 'main' | 'teamLife' | 'shadowRealm'
 
 export default function SecretTab({ onBack }: SecretTabProps) {
   const { memes, isAdmin, addMeme, loading } = useApp()
@@ -13,6 +17,9 @@ export default function SecretTab({ onBack }: SecretTabProps) {
   const [description, setDescription] = useState('')
   const [imageUrl, setImageUrl] = useState('')
   const [questUnlocked, setQuestUnlocked] = useState(() => getItem<boolean>('secret-quest-passed', false))
+  const [innerView, setInnerView] = useState<InnerView>('main')
+  const [shadowFade, setShadowFade] = useState(false)
+  const [shadowDimmed, setShadowDimmed] = useState(false)
 
   const unlockQuest = useCallback(() => setQuestUnlocked(true), [])
 
@@ -20,6 +27,26 @@ export default function SecretTab({ onBack }: SecretTabProps) {
     removeItem('secret-quest-passed')
     setQuestUnlocked(false)
   }, [])
+
+  const openShadowRealm = () => {
+    setShadowDimmed(true)
+    setTimeout(() => {
+      setInnerView('shadowRealm')
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setShadowFade(true)
+        })
+      })
+    }, 250)
+  }
+
+  const closeShadowRealm = () => {
+    setShadowFade(false)
+    setTimeout(() => {
+      setInnerView('main')
+      setShadowDimmed(false)
+    }, 250)
+  }
 
   const submit = async (): Promise<void> => {
     if (!description.trim()) return
@@ -31,9 +58,56 @@ export default function SecretTab({ onBack }: SecretTabProps) {
     }
   }
 
-  return (
-          <div className="mx-auto min-h-screen max-w-md px-4 pb-32 pt-6 overflow-y-auto">
+  // ─── Team Life sub-view ───
+  if (innerView === 'teamLife') {
+    return (
+      <SwipeBack onBack={() => setInnerView('main')} innerClassName="mx-auto max-w-md px-5 pb-8 pt-12">
+        <button
+          onClick={() => setInnerView('main')}
+          className="mb-4 flex items-center gap-2 text-sm font-bold text-neon hover:text-white transition-colors"
+        >
+          ← Назад в Секретную комнату
+        </button>
+        <TeamLifePanel />
+      </SwipeBack>
+    )
+  }
 
+  // ─── Shadow Realm sub-view ───
+  if (innerView === 'shadowRealm') {
+    return (
+      <>
+        <div
+          className="fixed inset-0 z-40 bg-black"
+          style={{ opacity: shadowDimmed ? 0.6 : 0, transition: 'opacity 250ms ease-out' }}
+        />
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          style={{
+            opacity: shadowFade ? 1 : 0,
+            transition: 'opacity 250ms ease-out',
+          }}
+        >
+          <div
+            className="mx-auto max-w-md"
+            style={{
+              backgroundImage: 'url(/new-panel-inner.webp)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center top',
+              minHeight: '100dvh',
+            }}
+          >
+            <div className="relative z-10 px-5 pb-8 pt-12">
+              <GamePanel onBack={closeShadowRealm} />
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <div className="mx-auto min-h-screen max-w-md px-4 pb-32 pt-6 overflow-y-auto">
 
       <BackButton onBack={onBack} />
       <div className="mb-7 flex items-start justify-between">
@@ -58,6 +132,32 @@ export default function SecretTab({ onBack }: SecretTabProps) {
               style={{ boxShadow: '0 0 40px rgba(236,72,153,0.5)' }}
               onError={(e) => { (e.target as HTMLImageElement).src = 'https://drive.google.com/uc?id=1pnfg4Tz__Sp0AquLUdxulwix2DZh9Tlu'; }}
             />
+          </div>
+
+          {/* Team Life and Shadow Realm panels */}
+          <div className="mb-4 space-y-4">
+            <button
+              onClick={() => setInnerView('teamLife')}
+              className="group block w-full overflow-hidden rounded-2xl text-left transition-transform duration-300 hover:scale-[1.02] active:scale-[0.97] focus:outline-none focus:ring-2 focus:ring-neon/60"
+              style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.35)' }}
+            >
+              <img
+                src="/banner-team-life.webp"
+                alt="Жизнь команды"
+                className="block aspect-square h-auto w-full object-contain transition duration-300 group-hover:brightness-110"
+              />
+            </button>
+            <button
+              onClick={openShadowRealm}
+              className="group block w-full overflow-hidden rounded-2xl text-left transition-transform duration-300 hover:scale-[1.02] active:scale-[0.97] focus:outline-none focus:ring-2 focus:ring-neon/60"
+              style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.35)' }}
+            >
+              <img
+                src="/banner-new-panel.webp"
+                alt="Обитель теней"
+                className="block aspect-square h-auto w-full object-contain transition duration-300 group-hover:brightness-110"
+              />
+            </button>
           </div>
           {loading ? (
             <p className="py-10 text-center text-sm text-ink-muted">Загрузка ленты...</p>
