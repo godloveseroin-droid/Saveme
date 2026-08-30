@@ -59,6 +59,13 @@ export type TestQuestionRow = {
   question_text: string
   options: string[]
   correct_answer: number | null
+  block_number?: number | null
+}
+
+export type TestBlockAssignment = {
+  question_id: string
+  block_number: number
+  updated_at: string
 }
 
 export type KnowledgeNumber = {
@@ -271,6 +278,30 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ correct_answer }),
     }),
+
+  // Test question block assignments (served by Supabase Edge Function)
+  getTestBlockAssignments: async (): Promise<TestBlockAssignment[]> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-blocks`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+    })
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    return res.json()
+  },
+  setTestBlockAssignment: async (questionId: string, blockNumber: number | null, password: string): Promise<{ question_id: string; block_number: number | null }> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-blocks`
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ question_id: questionId, block_number: blockNumber, password }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || `API ${res.status}`)
+    return body as { question_id: string; block_number: number | null }
+  },
 
   // Knowledge numbers (served by Supabase Edge Function)
   getKnowledgeNumbers: async (): Promise<KnowledgeNumber[]> => {

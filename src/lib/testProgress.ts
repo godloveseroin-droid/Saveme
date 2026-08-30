@@ -97,27 +97,26 @@ export const BLOCK_SIZE = 110
 export type BlockDef = {
   id: string
   label: string
-  rangeStart: number
-  rangeEnd: number
+  blockNumber: number | null
   isMega?: boolean
 }
 
 export const BLOCKS: BlockDef[] = [
-  { id: 'block1', label: 'Блок 1', rangeStart: 1, rangeEnd: 110 },
-  { id: 'block2', label: 'Блок 2', rangeStart: 111, rangeEnd: 220 },
-  { id: 'block3', label: 'Блок 3', rangeStart: 221, rangeEnd: 330 },
-  { id: 'block4', label: 'Блок 4', rangeStart: 331, rangeEnd: 440 },
-  { id: 'mega', label: 'Мега марафон', rangeStart: 1, rangeEnd: 440, isMega: true },
+  { id: 'block1', label: 'Блок 1', blockNumber: 1 },
+  { id: 'block2', label: 'Блок 2', blockNumber: 2 },
+  { id: 'block3', label: 'Блок 3', blockNumber: 3 },
+  { id: 'block4', label: 'Блок 4', blockNumber: 4 },
+  { id: 'mega', label: 'Мега марафон', blockNumber: null, isMega: true },
 ]
 
 export function questionsForBlock(
   allSorted: TestQuestionRow[],
   block: BlockDef,
 ): TestQuestionRow[] {
-  return allSorted.filter((q, idx) => {
-    const seq = idx + 1 // 1-based sequence in sorted order
-    return seq >= block.rangeStart && seq <= block.rangeEnd
-  })
+  if (block.isMega) {
+    return allSorted.filter(q => q.block_number !== null && q.block_number !== undefined)
+  }
+  return allSorted.filter(q => q.block_number === block.blockNumber)
 }
 
 export function countAvailable(

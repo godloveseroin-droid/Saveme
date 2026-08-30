@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Search, Check, TriangleAlert as AlertTriangle, Save, Lock } from 'lucide-react'
 import SwipeBack from './SwipeBack'
-import { api } from '../lib/api'
+import { api, type TestBlockAssignment } from '../lib/api'
 import { testQuestions, type TestQuestion } from '../lib/testQuestionsData'
 
 type Props = {
@@ -15,21 +15,28 @@ type DbQuestion = {
   correct_answer: number | null
 }
 
+type BlockFilter = 'all' | 'block1' | 'block2' | 'block3' | 'block4' | 'noblock'
+
 export default function AdminPanel({ onBack }: Props) {
   const [authed, setAuthed] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState(false)
 
   const [dbQuestions, setDbQuestions] = useState<DbQuestion[]>([])
+  const [blockAssignments, setBlockAssignments] = useState<Map<string, number>>(new Map())
   const [loading, setLoading] = useState(true)
   const [seeding, setSeeding] = useState(false)
   const [seedMsg, setSeedMsg] = useState('')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'answered' | 'unanswered'>('all')
+  const [blockFilter, setBlockFilter] = useState<BlockFilter>('all')
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [savingBlockId, setSavingBlockId] = useState<string | null>(null)
   const [localSelections, setLocalSelections] = useState<Record<string, number>>({})
+  const [localBlocks, setLocalBlocks] = useState<Record<string, number | null>>({})
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({})
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
+  const [blockSaveSuccess, setBlockSaveSuccess] = useState<string | null>(null)
 
   const handlePassword = (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,9 +54,13 @@ export default function AdminPanel({ onBack }: Props) {
     ;(async () => {
       setLoading(true)
       try {
-        const rows = await api.getTestQuestions()
+        const [rows, blocks] = await Promise.all([
+          api.getTestQuestions(),
+          api.getTestBlockAssignments(),
+        ])
         if (cancelled) return
         setDbQuestions(rows as DbQuestion[])
+        setBlockAssignments(new Map(blocks.map((b: TestBlockAssignment) => [b.question_id, b.block_number])))
       } catch {
         if (!cancelled) setDbQuestions([])
       } finally {
@@ -79,6 +90,11 @@ export default function AdminPanel({ onBack }: Props) {
     }
   }
 
+  const getEffectiveBlock = (qId: string): number | null => {
+    if (qId in localBlocks) return localBlocks[qId]
+    return blockAssignments.get(qId) ?? null
+  }
+
   const mergedQuestions = useMemo(() => {
     const dbMap = new Map(dbQuestions.map(q => [q.question_id, q]))
     return testQuestions.map(q => {
@@ -89,6 +105,7 @@ export default function AdminPanel({ onBack }: Props) {
           question: dbRow.question_text,
           options: dbRow.options,
           correct_answer: dbRow.correct_answer,
+          block_number: getEffectiveBlock(q.id),
         }
       }
       return {
@@ -96,9 +113,10 @@ export default function AdminPanel({ onBack }: Props) {
         question: q.question,
         options: q.options,
         correct_answer: null,
+        block_number: getEffectiveBlock(q.id),
       }
     })
-  }, [dbQuestions])
+  }, [dbQuestions, blockAssignments, localBlocks])
 
   const filtered = useMemo(() => {
     let result = mergedQuestions
@@ -106,6 +124,17 @@ export default function AdminPanel({ onBack }: Props) {
       result = result.filter(q => q.correct_answer !== null || localSelections[q.id] !== undefined)
     } else if (filter === 'unanswered') {
       result = result.filter(q => q.correct_answer === null && localSelections[q.id] === undefined)
+    }
+    if (blockFilter === 'block1') {
+      result = result.filter(q => q.block_number === 1)
+    } else if (blockFilter === 'block2') {
+      result = result.filter(q => q.block_number === 2)
+    } else if (blockFilter === 'block3') {
+      result = result.filter(q => q.block_number === 3)
+    } else if (blockFilter === 'block4') {
+      result = result.filter(q => q.block_number === 4)
+    } else if (blockFilter === 'noblock') {
+      result = result.filter(q => q.block_number === null)
     }
     if (search.trim()) {
       const s = search.trim().toLowerCase()
@@ -115,15 +144,64 @@ export default function AdminPanel({ onBack }: Props) {
       )
     }
     return result
-  }, [mergedQuestions, filter, search, localSelections])
+  }, [mergedQuestions, filter, blockFilter, search, localSelections])
 
   const stats = useMemo(() => {
     const answered = mergedQuestions.filter(q => q.correct_answer !== null).length
-    return { total: mergedQuestions.length, answered, unanswered: mergedQuestions.length - answered }
+    const b1 = mergedQuestions.filter(q => q.block_number === 1).length
+    const b2 = mergedQuestions.filter(q => q.block_number === 2).length
+    const b3 = mergedQuestions.filter(q => q.block_number === 3).length
+    const b4 = mergedQuestions.filter(q => q.block_number === 4).length
+    const megaSet = new Set(mergedQuestions.filter(q => q.block_number !== null).map(q => q.id))
+    return {
+      total: mergedQuestions.length,
+      answered,
+      unanswered: mergedQuestions.length - answered,
+      b1, b2, b3, b4,
+      mega: megaSet.size,
+    }
   }, [mergedQuestions])
 
   const handleSelect = (qId: string, optionIndex: number) => {
     setLocalSelections(prev => ({ ...prev, [qId]: optionIndex }))
+  }
+
+  const handleSelectBlock = (qId: string, blockNum: number | null) => {
+    setLocalBlocks(prev => ({ ...prev, [qId]: blockNum }))
+  }
+
+  const handleSaveBlock = async (qId: string) => {
+    const blockValue = localBlocks[qId]
+    if (blockValue === undefined) return
+    setSavingBlockId(qId)
+    setSaveErrors(prev => { const n = { ...prev }; delete n[qId + '-block']; return n })
+    try {
+      await api.setTestBlockAssignment(qId, blockValue, '3010')
+      if (blockValue === null) {
+        setBlockAssignments(prev => {
+          const next = new Map(prev)
+          next.delete(qId)
+          return next
+        })
+      } else {
+        setBlockAssignments(prev => {
+          const next = new Map(prev)
+          next.set(qId, blockValue)
+          return next
+        })
+      }
+      setLocalBlocks(prev => {
+        const next = { ...prev }
+        delete next[qId]
+        return next
+      })
+      setBlockSaveSuccess(qId)
+      setTimeout(() => setBlockSaveSuccess(prev => prev === qId ? null : prev), 3000)
+    } catch (err) {
+      setSaveErrors(prev => ({ ...prev, [qId + '-block']: err instanceof Error ? err.message : 'Ошибка сохранения' }))
+    } finally {
+      setSavingBlockId(null)
+    }
   }
 
   const handleSave = async (qId: string) => {
@@ -222,10 +300,18 @@ export default function AdminPanel({ onBack }: Props) {
         Админ-панель тестов
       </h2>
 
-      <div className="mb-4 flex items-center gap-3 rounded-xl border border-neon/20 bg-card/50 p-3 text-sm">
+      <div className="mb-3 flex items-center gap-3 rounded-xl border border-neon/20 bg-card/50 p-3 text-sm">
         <span className="font-bold text-neon">{stats.answered}</span>
         <span className="text-ink/60">/ {stats.total} отвечено</span>
         <span className="ml-auto font-bold text-warning">{stats.unanswered} без ответа</span>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-neon/15 bg-card/40 p-2.5 text-[11px]">
+        <span className="font-bold text-neon/80">Б1: <span className="text-ink">{stats.b1}</span></span>
+        <span className="font-bold text-neon/80">Б2: <span className="text-ink">{stats.b2}</span></span>
+        <span className="font-bold text-neon/80">Б3: <span className="text-ink">{stats.b3}</span></span>
+        <span className="font-bold text-neon/80">Б4: <span className="text-ink">{stats.b4}</span></span>
+        <span className="font-bold text-neon/80">Марафон: <span className="text-ink">{stats.mega}</span></span>
       </div>
 
       <div className="mb-4 flex flex-col gap-3">
@@ -256,6 +342,29 @@ export default function AdminPanel({ onBack }: Props) {
           ))}
         </div>
 
+        <div className="flex flex-wrap gap-1.5">
+          {([
+            { key: 'all', label: 'Все блоки' },
+            { key: 'block1', label: 'Блок 1' },
+            { key: 'block2', label: 'Блок 2' },
+            { key: 'block3', label: 'Блок 3' },
+            { key: 'block4', label: 'Блок 4' },
+            { key: 'noblock', label: 'Без блока' },
+          ] as const).map(f => (
+            <button
+              key={f.key}
+              onClick={() => setBlockFilter(f.key)}
+              className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition ${
+                blockFilter === f.key
+                  ? 'border border-neon/50 bg-neon/15 text-neon'
+                  : 'border border-neon/15 bg-card/30 text-ink/50'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         <button
           onClick={handleSeed}
           disabled={seeding}
@@ -273,6 +382,8 @@ export default function AdminPanel({ onBack }: Props) {
           {filtered.map(q => {
             const effective = getEffectiveAnswer(q)
             const hasAnswer = effective !== null
+            const effectiveBlock = getEffectiveBlock(q.id)
+            const hasLocalBlock = q.id in localBlocks
             return (
               <div
                 key={q.id}
@@ -289,6 +400,15 @@ export default function AdminPanel({ onBack }: Props) {
                       <AlertTriangle size={14} /> Ответ ещё не назначен
                     </span>
                   )}
+                  <span
+                    className={`ml-auto rounded-md border px-2 py-0.5 text-[10px] font-bold ${
+                      effectiveBlock !== null
+                        ? 'border-neon/40 bg-neon/10 text-neon'
+                        : 'border-line/50 bg-black/20 text-ink-faint'
+                    }`}
+                  >
+                    {effectiveBlock !== null ? `Блок ${effectiveBlock}` : 'Без блока'}
+                  </span>
                 </div>
 
                 <p className="mb-3 text-sm text-ink/90">{q.question}</p>
@@ -317,11 +437,55 @@ export default function AdminPanel({ onBack }: Props) {
                   })}
                 </div>
 
+                {/* Block selector */}
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-ink-muted">Блок:</span>
+                  {[1, 2, 3, 4].map(bn => (
+                    <button
+                      key={bn}
+                      onClick={() => handleSelectBlock(q.id, bn)}
+                      className={`flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-bold transition active:scale-90 ${
+                        effectiveBlock === bn
+                          ? 'border-neon/60 bg-neon/20 text-neon'
+                          : 'border-neon/20 bg-bg/40 text-ink/50 hover:border-neon/40'
+                      }`}
+                    >
+                      {bn}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => handleSelectBlock(q.id, null)}
+                    className={`ml-1 rounded-lg border px-2 py-1 text-[10px] font-bold transition active:scale-90 ${
+                      effectiveBlock === null
+                        ? 'border-line/50 bg-black/30 text-ink-muted'
+                        : 'border-line/30 bg-bg/30 text-ink-faint hover:border-line/50'
+                    }`}
+                  >
+                    Без блока
+                  </button>
+                  {hasLocalBlock && (
+                    <button
+                      onClick={() => handleSaveBlock(q.id)}
+                      disabled={savingBlockId === q.id}
+                      className="ml-auto flex items-center gap-1.5 rounded-lg border border-neon/40 bg-neon/15 px-3 py-1.5 text-xs font-bold text-neon transition hover:bg-neon/25 active:scale-95 disabled:opacity-50"
+                    >
+                      <Save size={14} />
+                      {savingBlockId === q.id ? '...' : 'Блок'}
+                    </button>
+                  )}
+                </div>
+
                 {saveErrors[q.id] && (
                   <p className="mt-2 text-xs font-bold text-error">{saveErrors[q.id]}</p>
                 )}
+                {saveErrors[q.id + '-block'] && (
+                  <p className="mt-1 text-xs font-bold text-error">{saveErrors[q.id + '-block']}</p>
+                )}
                 {saveSuccess === q.id && (
-                  <p className="mt-2 text-xs font-bold text-success">Сохранено в базу</p>
+                  <p className="mt-2 text-xs font-bold text-success">Ответ сохранён</p>
+                )}
+                {blockSaveSuccess === q.id && (
+                  <p className="mt-1 text-xs font-bold text-success">Блок сохранён</p>
                 )}
                 {localSelections[q.id] !== undefined && q.correct_answer === null && (
                   <button

@@ -9,3 +9,6 @@ verify_jwt = false
 
 [functions.mini-games-2-6]
 verify_jwt = false
+
+[functions.test-blocks]
+verify_jwt = false

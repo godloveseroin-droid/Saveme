@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import SwipeBack from '../components/SwipeBack'
-import { api, type TestQuestionRow } from '../lib/api'
+import { api, type TestQuestionRow, type TestBlockAssignment } from '../lib/api'
 import {
   BLOCKS, sortQuestions, questionsForBlock, countAvailable,
   saveProgress, loadProgress, clearProgress,
@@ -56,10 +56,18 @@ export default function TestsPanelTab({ onBack }: Props) {
       setPhase('loading')
       setErrorMsg('')
       try {
-        const rows = await api.getActiveTestQuestions()
+        const [rows, blocks] = await Promise.all([
+          api.getActiveTestQuestions(),
+          api.getTestBlockAssignments(),
+        ])
         if (cancelled) return
-        const sorted = sortQuestions(rows)
-        setAllQuestions(rows)
+        const blockMap = new Map(blocks.map((b: TestBlockAssignment) => [b.question_id, b.block_number]))
+        const merged = rows.map((q: TestQuestionRow) => ({
+          ...q,
+          block_number: blockMap.get(q.question_id) ?? null,
+        }))
+        const sorted = sortQuestions(merged)
+        setAllQuestions(merged)
         setAllSorted(sorted)
         const saved = loadProgress()
         if (saved && saved.queue.length > 0) {
@@ -369,14 +377,13 @@ export default function TestsPanelTab({ onBack }: Props) {
       { color: '#a855f7', glow: 'rgba(168,85,247,0.25)', icon: Sparkles },
       { color: '#f59e0b', glow: 'rgba(245,158,11,0.25)', icon: Crown },
     ]
-    const rangeLabels = ['1–110', '111–220', '221–330', '331–440', 'Все 440 вопросов']
     return (
       <SwipeBack onBack={onBack} innerClassName="mx-auto w-full max-w-[520px] px-3 pb-6 pt-4">
         <button onClick={onBack} className="mb-4 text-sm font-bold text-neon hover:text-white transition-colors">← Назад</button>
 
         <div className="flex flex-col gap-3">
           {BLOCKS.map((block, i) => {
-            const { available } = countAvailable(allSorted, block)
+            const { available, total } = countAvailable(allSorted, block)
             const canStart = available > 0
             const theme = blockThemes[i]
             const Icon = theme.icon
@@ -412,7 +419,7 @@ export default function TestsPanelTab({ onBack }: Props) {
                     {block.label}
                   </span>
                   <span className="mt-0.5 text-xs font-bold" style={{ color: `${theme.color}cc` }}>
-                    {rangeLabels[i]}
+                    {total} {total === 1 ? 'вопрос' : total < 5 ? 'вопроса' : 'вопросов'}
                   </span>
                 </div>
                 <div
