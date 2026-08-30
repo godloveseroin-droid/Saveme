@@ -75,6 +75,10 @@ export type MiniGameProfile = {
   neededXp: number
   coins: number
   title: string
+  titleLevel: number
+  titleXp: number
+  titleCurrentXp: number
+  titleNeededXp: number
 }
 
 export type MiniGameProgress = {
@@ -130,6 +134,39 @@ export type DailyPollClaimResult = {
   breakdown?: DailyPollResultBreakdown[]
   results?: DailyPollCandidate[]
   alreadyClaimed?: boolean
+}
+
+// ─── Mini-games #2-6 shared types ───
+
+export type GameState = {
+  today: {
+    question: string
+    [key: string]: unknown
+  }
+  yesterday: {
+    question: string
+    [key: string]: unknown
+  } | null
+}
+
+export type GameVoteResult = {
+  success: boolean
+  message: string
+  profile?: MiniGameProfile
+  isCorrect?: boolean
+  correctIndex?: number
+  goldReward?: { titleXp: number; coins: number } | null
+  silverReward?: { titleXp: number; coins: number } | null
+}
+
+export type GameClaimResult = {
+  success: boolean
+  message?: string
+  totalTitleXp?: number
+  totalCoins?: number
+  winner?: string | number | null
+  alreadyClaimed?: boolean
+  profile?: MiniGameProfile
 }
 
 export const api = {
@@ -337,5 +374,44 @@ export const api = {
     const body = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(body.error || `API ${res.status}`)
     return body as DailyPollClaimResult
+  },
+
+  // Mini-games #2-6 (served by mini-games-2-6 edge function)
+  getGameState: async (gameKey: string, userId: string): Promise<GameState> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mini-games-2-6?gameKey=${encodeURIComponent(gameKey)}&userId=${encodeURIComponent(userId)}`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || `API ${res.status}`)
+    return body as GameState
+  },
+  submitGameVote: async (gameKey: string, userId: string, voteData: Record<string, unknown>): Promise<GameVoteResult> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mini-games-2-6`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ gameKey, userId, action: 'vote', ...voteData }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || `API ${res.status}`)
+    return body as GameVoteResult
+  },
+  claimGameResults: async (gameKey: string, userId: string): Promise<GameClaimResult> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mini-games-2-6`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ gameKey, userId, action: 'claimResults' }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error || `API ${res.status}`)
+    return body as GameClaimResult
   },
 }

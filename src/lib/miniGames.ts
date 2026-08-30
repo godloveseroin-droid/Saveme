@@ -108,11 +108,11 @@ export type GameInfo = {
 
 export const MINI_GAMES: GameInfo[] = [
   { number: 1, title: 'Вопрос дня', icon: '🔮', description: 'Ежедневный опрос с наградами' },
-  { number: 2, title: 'Мини-игра 2', icon: '⚡', description: 'Быстрые ответы на время' },
-  { number: 3, title: 'Мини-игра 3', icon: '🌙', description: 'Ночные загадки' },
-  { number: 4, title: 'Мини-игра 4', icon: '🔥', description: 'Испытание огнём' },
-  { number: 5, title: 'Мини-игра 5', icon: '⭐', description: 'Звёздный путь' },
-  { number: 6, title: 'Мини-игра 6', icon: '🎭', description: 'Маски и обманы' },
+  { number: 2, title: 'Кто из них?', icon: '⚡', description: 'Кто выживет в экстремальной ситуации?' },
+  { number: 3, title: 'Сделал бы?', icon: '🌙', description: 'Сделал бы это за 100 000?' },
+  { number: 4, title: 'Прошлая жизнь', icon: '🔥', description: 'Кто кем был в прошлой жизни?' },
+  { number: 5, title: 'Лучший дуэт', icon: '⭐', description: 'Какая команда лучше?' },
+  { number: 6, title: 'Оцени', icon: '🎭', description: 'Оцени коллегу от 0 до 5' },
   { number: 7, title: 'Мини-игра 7', icon: '💫', description: 'Поток сознания' },
   { number: 8, title: 'Мини-игра 8', icon: '🗝️', description: 'Ключи от тайны' },
   { number: 9, title: 'Мини-игра 9', icon: '🌌', description: 'Галактика вопросов' },

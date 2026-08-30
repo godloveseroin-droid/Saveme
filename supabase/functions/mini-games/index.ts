@@ -79,6 +79,63 @@ function recalcLevel(xp: number): { level: number; title: string } {
   return { level, title: level >= MAX_LEVEL ? LEVEL_TITLES[MAX_LEVEL] : (LEVEL_TITLES[level] || LEVEL_TITLES[1]) };
 }
 
+// Title XP system helpers (must match mini-games-2-6 edge function)
+const TITLE_TITLES: string[] = [
+  "Силиконовый ослик", "Нюхач куртки Семяшкина", "Кривошляпа из Забугоровки",
+  "Экзорцист туалетных кабин", "Министр бумажной духоты", "Дилер семечек",
+  "Спонсор депрессии", "Экстремальный потребитель тормозков", "Кибер-пельмень в тумане",
+  "Жертва медального танца", "Облизыватель журнала сдачи", "Бреющий во сне",
+  "Диванный самурай Амальгамы", "Коллекционер использованных ручек", "Мастер интриг на КПП",
+  "Повелитель сыворотки правды", "Святой отец кнопочных телефонов", "Энергетический вампир на чилле",
+  "Душитель подушек", "Архангел КПП", "Король-Призрак", "Бессмертный Всадник",
+  "Несущий Истину", "Великий Инквизитор", "Магистр Ордена",
+  "Хранитель Тайного Знания", "Архивариус Забытых Лет", "Страж Порога",
+  "Глашатай Рассвета", "Зверолов Сновидений", "Кузнец Судеб",
+  "Проводник Восьмого Пути", "Чтец Пустых Строк", "Великий Молчальник",
+  "Ткач Несказанного", "Око Бесконечности", "Хранитель Равновесия",
+  "Архитектор Тишины", "Наследник Пепла", "Властелин Осколков",
+  "Строитель Мостов", "Хранитель Времени", "Мастер Отражений",
+  "Капитан Забвения", "Странник Края", "Хранитель Источника",
+  "Грандмейстер Амальгамы", "Абсолютный Магистр", "Вечный Страж",
+  "Легенда Амальгамы",
+];
+const MAX_TITLE_LEVEL = 50;
+
+function titleXpForLevel(level: number): number {
+  if (level >= 1 && level <= 5) return 20;
+  if (level >= 6 && level <= 10) return 30;
+  if (level >= 11 && level <= 20) return 40;
+  if (level >= 21 && level <= 30) return 50;
+  if (level >= 31 && level <= 40) return 65;
+  if (level >= 41 && level <= 45) return 80;
+  if (level >= 46 && level <= 49) return 100;
+  return 0;
+}
+
+function recalcTitleLevel(titleXp: number): { level: number; currentXp: number; neededXp: number; title: string } {
+  let level = 1;
+  let remaining = titleXp;
+  while (level < MAX_TITLE_LEVEL) {
+    const needed = titleXpForLevel(level);
+    if (needed > 0 && remaining >= needed) {
+      remaining -= needed;
+      level++;
+    } else {
+      break;
+    }
+  }
+  const needed = titleXpForLevel(level);
+  const title = level >= MAX_TITLE_LEVEL
+    ? TITLE_TITLES[MAX_TITLE_LEVEL - 1]
+    : (TITLE_TITLES[level - 1] || TITLE_TITLES[0]);
+  return {
+    level,
+    currentXp: level >= MAX_TITLE_LEVEL ? 0 : remaining,
+    neededXp: level >= MAX_TITLE_LEVEL ? 0 : needed,
+    title,
+  };
+}
+
 function currentLevelXP(xp: number): { level: number; currentXp: number; neededXp: number; title: string } {
   const { level, title } = recalcLevel(xp);
   let spent = 0;
@@ -118,7 +175,7 @@ Deno.serve(async (req: Request) => {
       // Get or create profile
       let { data: profile, error: profErr } = await supabase
         .from("mini_game_profile")
-        .select("user_id, level, xp, coins, title, updated_at")
+        .select("user_id, level, xp, coins, title, title_xp, title_level, updated_at")
         .eq("user_id", userId)
         .maybeSingle();
 
@@ -132,8 +189,8 @@ Deno.serve(async (req: Request) => {
       if (!profile) {
         const { data: newProfile, error: insertErr } = await supabase
           .from("mini_game_profile")
-          .insert({ user_id: userId, level: 1, xp: 0, coins: 0, title: LEVEL_TITLES[1] })
-          .select("user_id, level, xp, coins, title, updated_at")
+          .insert({ user_id: userId, level: 1, xp: 0, coins: 0, title: LEVEL_TITLES[1], title_xp: 0, title_level: 1 })
+          .select("user_id, level, xp, coins, title, title_xp, title_level, updated_at")
           .single();
         if (insertErr) {
           return new Response(JSON.stringify({ error: insertErr.message }), {
@@ -159,6 +216,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const { level, currentXp, neededXp, title } = currentLevelXP(profile.xp);
+      const titleInfo = recalcTitleLevel(profile.title_xp || 0);
 
       return new Response(JSON.stringify({
         profile: {
@@ -168,7 +226,11 @@ Deno.serve(async (req: Request) => {
           currentXp,
           neededXp,
           coins: profile.coins,
-          title,
+          title: titleInfo.title,
+          titleLevel: titleInfo.level,
+          titleXp: profile.title_xp || 0,
+          titleCurrentXp: titleInfo.currentXp,
+          titleNeededXp: titleInfo.neededXp,
         },
         progress: progress || [],
       }), {

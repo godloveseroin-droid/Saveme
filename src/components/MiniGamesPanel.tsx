@@ -2,8 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { Coins, Lock } from 'lucide-react'
 import { api, type MiniGameProfile, type MiniGameProgress } from '../lib/api'
 import { getLevelInfo, MINI_GAMES } from '../lib/miniGames'
+import { getTitleInfo, isMaxTitle } from '../lib/titles'
 import { useApp } from '../context/AppContext'
 import DailyPollGame from './DailyPollGame'
+import WhoOfThemGame from './games/WhoOfThemGame'
+import WouldHeDoItGame from './games/WouldHeDoItGame'
+import PastLifeGame from './games/PastLifeGame'
+import BestDuoGame from './games/BestDuoGame'
+import RatePlayerGame from './games/RatePlayerGame'
 
 type Props = { onBack: () => void }
 
@@ -14,30 +20,66 @@ export default function MiniGamesPanel({ onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedGame, setSelectedGame] = useState<number | null>(null)
+  const [titlePopup, setTitlePopup] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     if (!currentUser) return
     try {
       const data = await api.getMiniGameData(currentUser.id)
+      const prevProfile = profile
       setProfile(data.profile)
       setProgress(data.progress)
+
+      // Title level-up popup
+      if (prevProfile && data.profile.titleLevel > prevProfile.titleLevel) {
+        setTitlePopup(data.profile.title)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки')
     } finally {
       setLoading(false)
     }
-  }, [currentUser])
+  }, [currentUser, profile])
 
   useEffect(() => { void loadData() }, [loadData])
 
+  const refreshProfile = useCallback(async () => {
+    if (!currentUser) return
+    try {
+      const data = await api.getMiniGameData(currentUser.id)
+      const prevProfile = profile
+      setProfile(data.profile)
+      setProgress(data.progress)
+      if (prevProfile && data.profile.titleLevel > prevProfile.titleLevel) {
+        setTitlePopup(data.profile.title)
+      }
+    } catch {
+      // silent
+    }
+  }, [currentUser, profile])
+
   // -- Game screen --
   if (selectedGame !== null) {
-    // Game #1: Вопрос дня — full implementation
     if (selectedGame === 1) {
       return <DailyPollGame onBack={() => setSelectedGame(null)} />
     }
+    if (selectedGame === 2) {
+      return <WhoOfThemGame onBack={() => setSelectedGame(null)} onProfileUpdate={refreshProfile} />
+    }
+    if (selectedGame === 3) {
+      return <WouldHeDoItGame onBack={() => setSelectedGame(null)} onProfileUpdate={refreshProfile} />
+    }
+    if (selectedGame === 4) {
+      return <PastLifeGame onBack={() => setSelectedGame(null)} onProfileUpdate={refreshProfile} />
+    }
+    if (selectedGame === 5) {
+      return <BestDuoGame onBack={() => setSelectedGame(null)} onProfileUpdate={refreshProfile} />
+    }
+    if (selectedGame === 6) {
+      return <RatePlayerGame onBack={() => setSelectedGame(null)} onProfileUpdate={refreshProfile} />
+    }
 
-    // Games 2-10: placeholder
+    // Games 7-10: placeholder
     const game = MINI_GAMES.find((g) => g.number === selectedGame)
     return (
       <div className="mx-auto max-w-md px-5 pb-10 pt-6">
@@ -68,6 +110,7 @@ export default function MiniGamesPanel({ onBack }: Props) {
 
   // -- Main panel --
   const levelInfo = profile ? getLevelInfo(profile.xp) : null
+  const titleInfo = profile ? getTitleInfo(profile.titleXp) : null
 
   return (
     <div className="mx-auto max-w-md px-4 pb-10 pt-6">
@@ -78,6 +121,19 @@ export default function MiniGamesPanel({ onBack }: Props) {
         ← Назад
       </button>
 
+      {/* Title level-up popup */}
+      {titlePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setTitlePopup(null)}>
+          <div className="mx-4 max-w-sm rounded-2xl border border-accent/50 bg-card/90 p-6 text-center backdrop-blur-md" style={{ boxShadow: '0 0 30px rgba(255,43,214,0.3)' }} onClick={(e) => e.stopPropagation()}>
+            <p className="text-[10px] font-bold tracking-widest text-accent">НОВОЕ ЗВАНИЕ</p>
+            <p className="mt-3 text-xl font-extrabold text-ink" style={{ textShadow: '0 0 12px rgba(255,43,214,0.4)' }}>{titlePopup}</p>
+            <button onClick={() => setTitlePopup(null)} className="mt-4 rounded-xl bg-accent px-6 py-2 text-sm font-extrabold text-white transition active:scale-95">
+              Отлично!
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Profile card */}
       {loading ? (
         <div className="py-12 text-center text-sm text-ink-muted">Загрузка профиля...</div>
@@ -85,7 +141,7 @@ export default function MiniGamesPanel({ onBack }: Props) {
         <div className="rounded-xl border border-error/30 bg-error/10 p-4 text-center">
           <p className="text-sm font-bold text-error">{error}</p>
         </div>
-      ) : profile && levelInfo ? (
+      ) : profile && levelInfo && titleInfo ? (
         <div
           className="mb-5 rounded-2xl border border-neon/30 bg-card/60 p-4 backdrop-blur-md"
           style={{ boxShadow: '0 0 18px rgba(0,229,255,0.1)' }}
@@ -99,7 +155,7 @@ export default function MiniGamesPanel({ onBack }: Props) {
                 </span>
               </div>
               <p className="mt-0.5 text-xs font-bold tracking-wide text-accent" style={{ textShadow: '0 0 8px rgba(255,43,214,0.4)' }}>
-                {levelInfo.title}
+                {titleInfo.title}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-1.5">
@@ -108,7 +164,7 @@ export default function MiniGamesPanel({ onBack }: Props) {
             </div>
           </div>
 
-          {/* XP progress bar */}
+          {/* Ordinary XP progress bar */}
           <div className="mt-3">
             <div className="mb-1 flex items-center justify-between text-[10px] font-bold">
               <span className="text-neon/80">XP</span>
@@ -123,6 +179,26 @@ export default function MiniGamesPanel({ onBack }: Props) {
                   width: `${levelInfo.progressPercent}%`,
                   background: 'linear-gradient(90deg, rgba(0,229,255,0.6), rgba(0,229,255,1))',
                   boxShadow: '0 0 8px rgba(0,229,255,0.5)',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Title XP progress bar */}
+          <div className="mt-2.5">
+            <div className="mb-1 flex items-center justify-between text-[10px] font-bold">
+              <span className="text-accent/80">XP ЗВАНИЯ</span>
+              <span className="text-ink-muted">
+                {isMaxTitle(titleInfo.level) ? 'MAX' : `${titleInfo.currentXp} / ${titleInfo.neededXp}`}
+              </span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-black/40">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${titleInfo.progressPercent}%`,
+                  background: 'linear-gradient(90deg, rgba(255,43,214,0.6), rgba(255,43,214,1))',
+                  boxShadow: '0 0 8px rgba(255,43,214,0.4)',
                 }}
               />
             </div>
