@@ -1060,6 +1060,7 @@ async function handlePastLifeGet(supabase: SupabaseClient, userId: string, today
       question: questions[daily.question_index] || questions[0],
       players,
       userVote: vote ? { selected_index: vote.selected_index, is_correct: vote.is_correct } : null,
+      correctIndex: vote ? daily.correct_index : null,
     },
     yesterday: yesterdayData,
   });

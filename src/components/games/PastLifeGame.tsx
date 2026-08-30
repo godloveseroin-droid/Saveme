@@ -12,6 +12,7 @@ type TodayState = {
   question: string
   players: string[]
   userVote: { selected_index: number; is_correct: boolean } | null
+  correctIndex: number | null
 }
 
 type YesterdayState = {
@@ -175,7 +176,9 @@ export default function PastLifeGame({ onBack, onProfileUpdate }: Props) {
               {(voteResult?.isCorrect || today.userVote?.is_correct) && (
                 <p className="mt-1 text-sm font-extrabold text-neon" style={{ textShadow: '0 0 10px rgba(0,229,255,0.4)' }}>🥇 +3 XP звания +3🪙</p>
               )}
-              <p className="mt-1 text-[11px] text-ink-muted">Правильный ответ: {today.players[today.userVote?.selected_index === 0 ? 0 : today.userVote?.selected_index === 1 ? 1 : 2]}</p>
+              {!(voteResult?.isCorrect || today.userVote?.is_correct) && (
+                <p className="mt-1 text-[11px] text-ink-muted">Правильный ответ: {today.players[today.correctIndex ?? 0]}</p>
+              )}
             </div>
           ) : (
             <button onClick={handleVote} disabled={selected === null || voting} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-neon py-3 text-sm font-extrabold text-black transition active:scale-95 disabled:opacity-40" style={{ boxShadow: '0 0 16px rgba(0,229,255,0.3)' }}>
